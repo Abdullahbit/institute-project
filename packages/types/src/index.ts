@@ -16,3 +16,17 @@ export const SchoolSchema = z.object({
   created_at: z.string(),
 });
 export type School = z.infer<typeof SchoolSchema>;
+
+export const CreateInvitationSchema = z.object({
+  email: z.string().email(),
+  role: UserRoleSchema,
+});
+export type CreateInvitationInput = z.infer<typeof CreateInvitationSchema>;
+
+export const AcceptInvitationSchema = z.object({
+  token: z.string().min(1),
+  fullName: z.string().min(2),
+  password: z.string().min(6),
+});
+export type AcceptInvitationInput = z.infer<typeof AcceptInvitationSchema>;
+
