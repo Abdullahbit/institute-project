@@ -1,0 +1,262 @@
+MASTER CONTEXT DOCUMENT
+Institute Management Platform
+Feed this to Antigravity's knowledge base before running any agent task.
+This is the single source of truth for all architectural decisions.
+Model Strategy: Claude Sonnet 4.6 for backend/architecture  |  Gemini 3 Pro for frontend/UI
+1. Product Vision
+An operational SaaS platform for language institutes that replaces paper schedules, physical hour logs, handwritten reports, and WhatsApp group chaos with a structured, role-based digital system — and makes classes more engaging through built-in game tools.
+Target Market
+Primary: Independent language institutes (40–200 teachers)
+Secondary: Franchise language school chains (multi-branch hierarchy)
+Geography: Initially local, designed for international expansion
+Core Value Proposition
+For admins: Real-time teacher accountability, clean digital records, no manual counting
+For teachers: One app for schedule, hours, attendance, reports, and classroom games
+For coordinators: Cross-branch visibility from any device, any location
+Multi-Tenancy Model
+Shared database (Option A) with strict Row-Level Security. Each school gets its own subdomain (e.g. brightminds.platform.com), logo, and color branding. Data is isolated per school_id at the database level via Postgres RLS policies. No school can ever access another school's data.
+Org Hierarchy
+Independent School:  school (parent_id = null) → teachers/students
+Franchise Chain:     franchise_HQ → branch_1 → teachers/students
+                                  → branch_2 → teachers/students
+Implementation: nullable parent_id on schools table.
+Franchise dashboard is POST-MVP — data model supports it from day one.
+2. Tech Stack — Non-Negotiable
+Every agent must respect these decisions. Do not substitute or suggest alternatives.
+Language
+TypeScript end-to-end — no JavaScript files
+Monorepo
+Turborepo
+Web Frontend
+Next.js 14+ (App Router) — admin portal + teacher web
+Mobile
+Expo (React Native) — teacher app + student app
+Backend
+Fastify + tRPC — modular monolith, NOT microservices
+Real-time
+Socket.io layered on top of Fastify for game sessions
+Database
+Supabase (Postgres + RLS + Auth + Storage)
+Cache
+Upstash Redis — game state, sessions, schedule cache
+AI Provider
+Anthropic Claude API (abstracted — swappable later)
+Job Queue
+Inngest — background AI analysis jobs
+Infra: API
+Railway — container-based, no serverless (WebSockets need persistent connections)
+Infra: Web
+Vercel — Next.js frontend
+Styling
+Tailwind CSS
+UI Components
+shadcn/ui
+Monorepo Structure
+apps/
+  web/          → Next.js (admin portal + teacher web dashboard)
+  mobile/       → Expo (teacher mobile + student mobile)
+  api/          → Fastify + tRPC (all backend logic)
+packages/
+  ui/           → shared React components (web + mobile)
+  types/        → shared TypeScript types and Zod schemas
+  config/       → shared ESLint, Tailwind, TypeScript configs
+3. Full Database Schema
+All tables live in Supabase (Postgres). Every table has school_id with RLS enforced. Use snake_case for all column names. All IDs are UUIDs.
+Core Tables
+schools
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  parent_id       uuid REFERENCES schools(id) NULLABLE  -- franchise HQ
+  name            text NOT NULL
+  slug            text UNIQUE NOT NULL  -- used for subdomain routing
+  branding        jsonb  -- { logo_url, primary_color, secondary_color }
+  created_at      timestamptz DEFAULT now()
+users
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  school_id       uuid REFERENCES schools(id) NOT NULL
+  role            text CHECK (role IN ('admin','teacher','student'))
+  full_name       text NOT NULL
+  email           text UNIQUE NOT NULL
+  phone           text
+  avatar_url      text
+  is_active       boolean DEFAULT true
+  created_at      timestamptz DEFAULT now()
+invitations
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  school_id       uuid REFERENCES schools(id) NOT NULL
+  email           text NOT NULL
+  role            text NOT NULL
+  token           text UNIQUE NOT NULL
+  expires_at      timestamptz NOT NULL
+  accepted_at     timestamptz NULLABLE
+  created_at      timestamptz DEFAULT now()
+Scheduling Tables
+classes
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  school_id       uuid REFERENCES schools(id) NOT NULL
+  name            text NOT NULL
+  level           text  -- A1,A2,B1,B2,C1,C2
+  age_group       text CHECK (age_group IN ('children','teens','adults'))
+  room            text
+  created_at      timestamptz DEFAULT now()
+schedules
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  school_id       uuid REFERENCES schools(id) NOT NULL
+  week_start      date NOT NULL
+  published_at    timestamptz NULLABLE
+  created_by      uuid REFERENCES users(id)
+  created_at      timestamptz DEFAULT now()
+schedule_slots
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  schedule_id     uuid REFERENCES schedules(id) NOT NULL
+  class_id        uuid REFERENCES classes(id) NOT NULL
+  teacher_id      uuid REFERENCES users(id) NOT NULL
+  room            text
+  start_time      timestamptz NOT NULL
+  end_time        timestamptz NOT NULL
+  -- CONSTRAINT: no teacher double-booking, no room double-booking
+  -- Enforced via Postgres trigger before INSERT/UPDATE
+Accountability Tables
+class_sessions
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  school_id       uuid REFERENCES schools(id) NOT NULL
+  class_id        uuid REFERENCES classes(id) NOT NULL
+  teacher_id      uuid REFERENCES users(id) NOT NULL
+  scheduled_date  date NOT NULL
+  start_time      timestamptz NOT NULL
+  end_time        timestamptz NOT NULL
+  status          text CHECK (status IN ('scheduled','ongoing','completed','cancelled','no_show'))
+  checkin_at      timestamptz NULLABLE
+  checkout_at     timestamptz NULLABLE
+  created_at      timestamptz DEFAULT now()
+alerts
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  school_id       uuid REFERENCES schools(id) NOT NULL
+  type            text CHECK (type IN ('late','no_show','substitute_needed'))
+  class_session_id uuid REFERENCES class_sessions(id)
+  resolved        boolean DEFAULT false
+  resolved_by     uuid REFERENCES users(id) NULLABLE
+  resolved_at     timestamptz NULLABLE
+  created_at      timestamptz DEFAULT now()
+substitute_requests
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  school_id       uuid REFERENCES schools(id) NOT NULL
+  class_session_id uuid REFERENCES class_sessions(id) NOT NULL
+  requested_by    uuid REFERENCES users(id) NOT NULL
+  status          text CHECK (status IN ('open','accepted','declined','cancelled'))
+  accepted_by     uuid REFERENCES users(id) NULLABLE
+  created_at      timestamptz DEFAULT now()
+hour_logs
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  school_id       uuid REFERENCES schools(id) NOT NULL
+  teacher_id      uuid REFERENCES users(id) NOT NULL
+  class_session_id uuid REFERENCES class_sessions(id) NULLABLE
+  log_date        date NOT NULL
+  class_type      text CHECK (class_type IN ('group','private','online'))
+  duration_minutes integer NOT NULL
+  notes           text NULLABLE
+  status          text CHECK (status IN ('pending','approved','rejected'))
+  audit_trail     jsonb DEFAULT '[]'  -- append-only, never delete
+  created_at      timestamptz DEFAULT now()
+Attendance & Reporting Tables
+students
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  school_id       uuid REFERENCES schools(id) NOT NULL
+  user_id         uuid REFERENCES users(id) NULLABLE  -- if student has login
+  full_name       text NOT NULL
+  level           text
+  age_group       text CHECK (age_group IN ('children','teens','adults'))
+  parent_phone    text NULLABLE
+  enrolled_at     timestamptz DEFAULT now()
+class_enrollments
+  class_id        uuid REFERENCES classes(id)
+  student_id      uuid REFERENCES students(id)
+  enrolled_at     timestamptz DEFAULT now()
+  PRIMARY KEY (class_id, student_id)
+attendance_records
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  school_id       uuid REFERENCES schools(id) NOT NULL
+  class_session_id uuid REFERENCES class_sessions(id) NOT NULL
+  student_id      uuid REFERENCES students(id) NOT NULL
+  status          text CHECK (status IN ('present','absent','late','excused'))
+  marked_by       uuid REFERENCES users(id)
+  marked_at       timestamptz DEFAULT now()
+  notes           text NULLABLE
+report_templates
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  school_id       uuid REFERENCES schools(id) NOT NULL
+  fields          jsonb NOT NULL  -- array of field definitions
+  created_by      uuid REFERENCES users(id)
+  created_at      timestamptz DEFAULT now()
+progress_reports
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  school_id       uuid REFERENCES schools(id) NOT NULL
+  student_id      uuid REFERENCES students(id) NOT NULL
+  teacher_id      uuid REFERENCES users(id) NOT NULL
+  class_session_id uuid REFERENCES class_sessions(id) NULLABLE
+  template_id     uuid REFERENCES report_templates(id) NULLABLE
+  term            text
+  content         jsonb NOT NULL
+  status          text CHECK (status IN ('draft','submitted','reviewed'))
+  submitted_at    timestamptz NULLABLE
+  reviewed_by     uuid REFERENCES users(id) NULLABLE
+  reviewed_at     timestamptz NULLABLE
+4. Architecture Rules — Agents Must Follow
+Security
+Every Supabase table MUST have a school_id column
+RLS policies must be enabled on every table — no exceptions
+Subdomain middleware resolves school_id before every API request
+Users can only access data where their school_id matches
+Auth uses Supabase Auth — do not build a custom auth system
+API Conventions
+All API routes use tRPC — no raw REST endpoints unless unavoidable
+All inputs validated with Zod schemas defined in packages/types
+Errors return structured objects: { code, message, details }
+All timestamps stored in UTC, displayed in local timezone on client
+Data Integrity
+hour_logs.audit_trail is append-only — never overwrite, only push new entries
+Schedule conflict detection runs as a Postgres trigger before INSERT/UPDATE
+No hard deletes on core records — use is_active or status flags
+All foreign keys must have explicit ON DELETE behavior defined
+Frontend Conventions
+Tailwind CSS only — no inline styles, no CSS modules
+shadcn/ui for all UI primitives — do not build custom form elements from scratch
+Mobile-first responsive design — every web view must work on a phone browser
+All forms use React Hook Form + Zod validation
+Loading states and error states are required on every data-fetching component
+Code Quality
+No any types in TypeScript — use proper typing or unknown with guards
+All shared types defined in packages/types — never duplicate type definitions
+Environment variables accessed only via a validated env.ts file
+No console.log in production code — use a proper logger
+5. User Roles & Permissions
+Role
+Permissions
+admin
+Full access to all school data. Manage teachers, schedules, approve hours, view all alerts, configure branding.
+teacher
+View own schedule, check in/out, log hours, mark attendance, submit reports, run games.
+student
+View own scores, join game sessions via room code, view own progress. (POST-MVP)
+6. MVP Scope — What Is In and Out
+Build only what is listed as IN SCOPE. Any agent that proposes building OUT OF SCOPE features must be redirected.
+IN SCOPE — Build Now
+Auth — login, invite flow, role-based routing
+Multi-tenant setup — subdomain routing, school branding config
+Teacher check-in / check-out with timestamp
+Late and no-show detection with admin alerts
+Substitute request flow — admin sends, teacher accepts/declines
+Digital hour logging with append-only audit trail
+Admin hour log approval / rejection
+Schedule management — create, edit, publish, conflict detection
+Teacher schedule view — personal, read-only, push notification on change
+Digital attendance marking per class session
+Handwritten report replacement — structured digital form + PDF export
+Admin dashboard — today's sessions, alerts, pending approvals
+OUT OF SCOPE — Post-MVP
+Game library and live game sessions (Phase 4)
+Student portal and student login (Phase 4)
+AI report generation and student struggle detection (Phase 4)
+Google Drive sync (Phase 4)
+Wage calculation and payroll (Phase 4)
+Franchise / multi-branch analytics dashboard (Phase 4)
+Parent notification system (Phase 4)
