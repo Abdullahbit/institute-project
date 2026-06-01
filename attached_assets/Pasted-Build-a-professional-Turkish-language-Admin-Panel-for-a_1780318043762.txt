@@ -1,0 +1,75 @@
+Build a professional Turkish-language Admin Panel for a language institute management SaaS platform called "EduPanel".
+
+## Tech Stack
+- Next.js 14 (App Router)
+- TypeScript
+- Tailwind CSS
+- shadcn/ui components
+- Mock data only (no backend)
+
+## Design
+- Dark sidebar, light main content area
+- Professional corporate dashboard aesthetic
+- Turkish language throughout
+- Responsive layout
+
+## Pages & Features to build
+
+### 1. Layout (applies to all pages)
+- Left sidebar (dark background) with:
+  - Platform logo "EduPanel" at top
+  - Navigation links: Ana Sayfa, Program, Öğretmenler, Öğrenciler, Saat Takibi, Uyarılar, Ayarlar
+  - Active state styling
+  - School name at bottom: "Bright Minds Dil Okulu"
+
+### 2. Ana Sayfa (Dashboard)
+- Top stats cards:
+  - Bugünkü Dersler (e.g. 12)
+  - Aktif Öğretmenler (e.g. 8)
+  - Toplam Öğrenci (e.g. 147)
+  - Bekleyen Onaylar (e.g. 3)
+- Today's schedule table: Saat | Sınıf | Öğretmen | Öğrenci Sayısı | Durum
+- Recent alerts section: late check-ins, substitution requests
+- Durum badges: Devam Ediyor (green), Tamamlandı (gray), İptal (red), Vekil Bekleniyor (yellow)
+
+### 3. Program (Schedule)
+- Weekly calendar grid view (Pazartesi - Cumartesi)
+- Time slots from 09:00 to 21:00
+- Lesson cards inside slots showing: class name, teacher name, room
+- Filters at top: Öğretmen, Sınıf Seviyesi, Oda
+- "Yeni Ders Ekle" button
+
+### 4. Öğretmenler (Teachers)
+- Table with columns: Ad Soyad | Branş | Aktif Dersler | Aylık Saat | Durum | İşlemler
+- Status: Aktif (green badge), İzinli (yellow badge), Pasif (gray badge)
+- Action buttons per row: Görüntüle, Düzenle
+- "Yeni Öğretmen Ekle" button at top right
+- Mock data: at least 6 teachers with realistic Turkish names
+
+### 5. Saat Takibi (Hour Tracking)
+- Monthly view table per teacher
+- Columns: Öğretmen | Planlanan Saat | Gerçekleşen Saat | Fark | Onay Durumu
+- Onay Durumu: Onaylandı (green), Beklemede (yellow), İtiraz (red)
+- Bulk approve button: "Seçilenleri Onayla"
+- Month/year selector at top
+
+### 6. Uyarılar (Alerts)
+- List of alerts with type icons:
+  - Geç Giriş (orange) — teacher checked in late
+  - Devamsızlık (red) — teacher no-show
+  - Vekil Talebi (blue) — substitution requested
+  - Onay Bekliyor (yellow) — hours awaiting approval
+- Each alert: timestamp, teacher name, class name, action button
+- Filter tabs: Tümü | Okunmamış | Devamsızlık | Vekil Talepleri
+
+## Mock Data
+Use realistic Turkish names and data throughout:
+- Teachers: Ayşe Kaya, Mehmet Demir, Zeynep Çelik, Ali Şahin, Fatma Yıldız, Can Arslan
+- Classes: A1 Başlangıç, A2 Temel, B1 Orta, B2 Üst-Orta, C1 İleri
+- Rooms: Sınıf 1, Sınıf 2, Sınıf 3, Laboratuvar
+
+## Important
+- All navigation must work (client-side routing between pages)
+- No backend calls — all data is hardcoded mock data
+- Clean, professional look — this will be shown to a real client
+- Mobile responsive sidebar (hamburger menu on small screens)
