@@ -1,0 +1,9 @@
+# Supabase local config — run `supabase start` when CLI is installed
+project_id = "institute-platform"
+
+[api]
+port = 54321
+
+[db]
+port = 54322
+major_version = 15

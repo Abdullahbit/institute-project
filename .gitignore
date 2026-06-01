@@ -27,6 +27,14 @@ node_modules
 !.vscode/launch.json
 !.vscode/extensions.json
 
+# env (PDF: never commit secrets)
+.env
+.env.local
+.env.*.local
+apps/api/.env
+apps/web/.env.local
+apps/mobile/.env
+
 # misc
 /.sass-cache
 /connect.lock
@@ -43,6 +51,9 @@ Thumbs.db
 
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
+
+# Nested duplicate clone (do not commit)
+Turkish-Admin-Panel/
 
 # Replit
 .cache/

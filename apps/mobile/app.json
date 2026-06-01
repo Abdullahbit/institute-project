@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "Institute",
+    "slug": "institute-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "institute",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.institute.mobile"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.institute.mobile"
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
