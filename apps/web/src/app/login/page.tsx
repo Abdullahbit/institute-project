@@ -27,7 +27,11 @@ export default function LoginPage() {
     // If already logged in, redirect to correct workspace
     if (user && role) {
       if (role === 'admin') {
-        router.push('/');
+        if (slug) {
+          router.push('/');
+        } else {
+          router.push('/admin/dashboard');
+        }
       } else if (role === 'teacher') {
         router.push('/teacher/dashboard');
       }
@@ -78,7 +82,11 @@ export default function LoginPage() {
       // Local testing: save matching tenant slug to local storage to simulate matching subdomain
       // In a production server, the subdomain resolver validates this.
       if (userRole === 'admin') {
-        router.push('/');
+        if (currentSlug) {
+          router.push('/');
+        } else {
+          router.push('/admin/dashboard');
+        }
       } else if (userRole === 'teacher') {
         router.push('/teacher/dashboard');
       } else {

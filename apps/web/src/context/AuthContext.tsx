@@ -133,9 +133,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (currentRole === 'admin' && isTeacherRoute) {
-      router.push('/');
-      return;
+    if (currentRole === 'admin') {
+      if (isTeacherRoute) {
+        router.push(slug ? '/' : '/admin/dashboard');
+        return;
+      }
+      
+      // If admin on master domain tries to access school dashboard (/), redirect to /admin/dashboard
+      if (!slug && !isAdminRoute && !isLoginOrInviteRoute) {
+        router.push('/admin/dashboard');
+        return;
+      }
+
+      // If school admin on school tenant tries to access super-admin dashboard (/admin/dashboard), redirect to /
+      if (slug && isAdminRoute && !isLoginOrInviteRoute) {
+        router.push('/');
+        return;
+      }
     }
 
     // If logged in and browsing dashboard, check if user's school matches slug
