@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { AdminShell } from "@/components/admin-shell";
-import { Building2, Bell, User, Shield, Check, Loader2 } from "lucide-react";
+import { Building2, Bell, User, Shield, Check, Loader2, UserPlus, Copy } from "lucide-react";
+import { trpc } from "@/lib/trpc";
 
 export default function AyarlarPage() {
   // Okul Bilgileri State
@@ -30,6 +31,48 @@ export default function AyarlarPage() {
   const [savingSchool, setSavingSchool] = useState(false);
   const [savingNotif, setSavingNotif] = useState(false);
   const [savingAccount, setSavingAccount] = useState(false);
+
+  // Davet Etme (Invitation) States
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"admin" | "teacher" | "student">("teacher");
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [inviteCopied, setInviteCopied] = useState(false);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+
+  const inviteMutation = trpc.admin.inviteUser.useMutation();
+
+  const handleInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteEmail) return;
+
+    setInviteLoading(true);
+    setInviteError(null);
+    setInviteLink(null);
+
+    try {
+      const res = await inviteMutation.mutateAsync({
+        email: inviteEmail,
+        role: inviteRole,
+      });
+
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+      const link = `${origin}/invite/${res.rawToken}`;
+      setInviteLink(link);
+      setInviteEmail('');
+    } catch (err: any) {
+      setInviteError(err?.message || 'Davetiye oluşturulamadı.');
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
+  const copyInviteToClipboard = () => {
+    if (!inviteLink) return;
+    navigator.clipboard.writeText(inviteLink);
+    setInviteCopied(true);
+    setTimeout(() => setInviteCopied(false), 2000);
+  };
 
   // Success Alert States
   const [schoolSuccess, setSchoolSuccess] = useState(false);
@@ -341,6 +384,100 @@ export default function AyarlarPage() {
                 )}
               </button>
             </div>
+          </div>
+        </div>
+
+        {/* Kullanıcı Davet Et (Staff & Student Invitation) */}
+        <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-slate-100 flex items-center gap-3">
+            <div className="p-2 bg-violet-50 rounded-lg text-violet-600">
+              <UserPlus className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-900">Kullanıcı Davet Et</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Sistemde yeni öğretmen, öğrenci veya yönetici hesabı oluşturmak için davetiye linki üretin.</p>
+            </div>
+          </div>
+          <div className="p-6 space-y-4 bg-white">
+            {inviteError && (
+              <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
+                {inviteError}
+              </div>
+            )}
+
+            <form onSubmit={handleInvite} className="flex flex-col gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">E-posta Adresi</label>
+                  <input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="personel@okul.com"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Erişim Rolü</label>
+                  <select
+                    value={inviteRole}
+                    onChange={(e) => setInviteRole(e.target.value as any)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
+                  >
+                    <option value="teacher">Öğretmen (Teacher)</option>
+                    <option value="admin">Yönetici (Admin)</option>
+                    <option value="student">Öğrenci (Student)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  disabled={inviteLoading}
+                  className="bg-primary hover:bg-blue-600 text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-sm transition-colors flex items-center gap-1.5"
+                >
+                  {inviteLoading ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Davetiye Oluşturuluyor...
+                    </>
+                  ) : (
+                    "Davet Linki Oluştur"
+                  )}
+                </button>
+              </div>
+            </form>
+
+            {inviteLink && (
+              <div className="mt-4 p-4 bg-violet-50/50 border border-violet-200/60 rounded-xl flex flex-col gap-3">
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-bold text-violet-700 uppercase tracking-wider">
+                    Davetiye Başarıyla Oluşturuldu
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    Bu davetiye 72 saat geçerlidir. Aşağıdaki bağlantıyı kopyalayarak davet edilen kişiye iletin:
+                  </span>
+                </div>
+                
+                <div className="flex gap-2 items-center bg-slate-50 p-2 rounded-lg border border-slate-200">
+                  <input
+                    type="text"
+                    value={inviteLink}
+                    readOnly
+                    className="w-full bg-transparent text-xs text-slate-700 select-all border-none outline-none font-mono"
+                  />
+                  <button
+                    onClick={copyInviteToClipboard}
+                    className="flex-shrink-0 bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 shadow-sm"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    {inviteCopied ? 'Kopyalandı!' : 'Kopyala'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
