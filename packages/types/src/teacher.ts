@@ -26,5 +26,17 @@ export const listTeachersInputSchema = z.object({
 export const createTeacherInputSchema = z.object({
   full_name: z.string().min(1),
   branch: z.string().min(1),
+  email: z.string().email().optional(),
+  phone: z.string().regex(/^\+?[1-9]\d{9,14}$/, { message: "Geçersiz telefon numarası formatı (örn: +905551234567)" }).optional(),
   status: teacherStatusSchema.default("active"),
 });
+
+export const updateTeacherInputSchema = z.object({
+  full_name: z.string().min(1).optional(),
+  branch: z.string().min(1).optional(),
+  email: z.string().email().optional(),
+  phone: z.string().regex(/^\+?[1-9]\d{9,14}$/, { message: "Geçersiz telefon numarası formatı (örn: +905551234567)" }).optional(),
+  status: teacherStatusSchema.optional(),
+  is_active: z.boolean().optional(),
+});
+

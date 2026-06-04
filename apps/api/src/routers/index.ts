@@ -7,6 +7,8 @@ import { alertsRouter } from "./alerts.js";
 import { adminRouter } from "./admin.js";
 import { authRouter } from "./auth.js";
 import { hoursRouter } from "./hours.js";
+import { studentsRouter } from "./students.js";
+import { classesRouter } from "./classes.js";
 
 export const appRouter = router({
   health: healthRouter,
@@ -17,6 +19,8 @@ export const appRouter = router({
   admin: adminRouter,
   auth: authRouter,
   hours: hoursRouter,
+  students: studentsRouter,
+  classes: classesRouter,
 });
 
 export type AppRouter = typeof appRouter;

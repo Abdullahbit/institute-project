@@ -6,5 +6,8 @@ export * from "./alert.js";
 export * from "./dashboard.js";
 export * from "./invitation.js";
 export * from "./hours.js";
+export * from "./student.js";
+export * from "./classes.js";
+
 
 

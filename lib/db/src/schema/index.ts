@@ -6,6 +6,9 @@ export const schools = pgTable("schools", {
   name: text("name").notNull(),
   subdomain: text("subdomain").notNull().unique(),
   isActive: boolean("is_active").notNull().default(true),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  subscriptionStatus: text("subscription_status"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -157,6 +160,36 @@ export const substituteRequests = pgTable("substitute_requests", {
   requestingTeacherId: uuid("requesting_teacher_id").notNull().references(() => teachers.id),
   coveringTeacherId: uuid("covering_teacher_id").references(() => teachers.id),
   status: text("status").notNull().default("pending"), // 'pending' | 'accepted' | 'declined'
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// 13. Student Logs Table
+export const studentLogs = pgTable("student_logs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  schoolId: uuid("school_id").notNull().references(() => schools.id),
+  lessonSessionId: uuid("lesson_session_id").notNull().references(() => lessonSessions.id),
+  studentId: uuid("student_id").notNull().references(() => students.id),
+  status: text("status").notNull(), // 'present' | 'absent' | 'late'
+  notes: text("notes"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// 14. Progress Reports Table
+export const progressReports = pgTable("progress_reports", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  schoolId: uuid("school_id").notNull().references(() => schools.id),
+  studentId: uuid("student_id").notNull().references(() => students.id),
+  teacherId: uuid("teacher_id").notNull().references(() => teachers.id),
+  levelCode: text("level_code").notNull(),
+  scoreListening: integer("score_listening").notNull(),
+  scoreSpeaking: integer("score_speaking").notNull(),
+  scoreOverall: integer("score_overall").notNull(),
+  notes: text("notes"),
+  reportDate: date("report_date").notNull().defaultNow(),
+  isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
