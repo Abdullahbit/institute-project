@@ -12,9 +12,11 @@ import {
   Menu,
   X,
   Clock,
-  Settings
+  Settings,
+  LogOut
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/context/AuthContext";
 
 const navItems = [
   { href: "/", label: "Ana Sayfa", icon: Home },
@@ -38,6 +40,7 @@ export function AdminShell({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [schoolName, setSchoolName] = useState("Bright Minds");
   const [schoolType, setSchoolType] = useState("Dil Okulu");
+  const { logout } = useAuth();
 
   React.useEffect(() => {
     const loadIdentity = () => {
@@ -105,17 +108,28 @@ export function AdminShell({
         })}
       </nav>
 
-      {/* School Identity */}
-      <div className="p-4 border-t border-sidebar-border bg-sidebar/50">
-        <div className="flex items-center gap-3">
+      {/* School Identity & Sign Out */}
+      <div className="p-4 border-t border-sidebar-border bg-sidebar/50 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-3 overflow-hidden">
           <div className="h-9 w-9 border border-sidebar-border rounded-full bg-primary/20 text-primary font-medium text-xs flex items-center justify-center shrink-0">
             {getInitials(schoolName)}
           </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-medium text-sidebar-foreground leading-none">{schoolName}</span>
-            <span className="text-xs text-sidebar-foreground/60 mt-1">{schoolType}</span>
+          <div className="flex flex-col overflow-hidden">
+            <span className="text-sm font-medium text-sidebar-foreground leading-none truncate">{schoolName}</span>
+            <span className="text-xs text-sidebar-foreground/60 mt-1 truncate">{schoolType}</span>
           </div>
         </div>
+        <button 
+          onClick={async () => {
+            if (confirm("Çıkış yapmak istediğinize emin misiniz?")) {
+              await logout();
+            }
+          }}
+          title="Çıkış Yap"
+          className="p-2 rounded-lg text-sidebar-foreground/50 hover:bg-rose-500/10 hover:text-rose-500 transition-colors shrink-0"
+        >
+          <LogOut className="h-5 w-5" />
+        </button>
       </div>
     </div>
   );
