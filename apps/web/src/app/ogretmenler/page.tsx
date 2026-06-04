@@ -38,7 +38,7 @@ function getStatusBadge(status: string) {
 }
 
 export default function OgretmenlerPage() {
-  const { data: apiData, isLoading, error } = trpc.teachers.list.useQuery();
+  const { data: apiData, isLoading, error, refetch } = trpc.teachers.list.useQuery();
   const [teachers, setTeachers] = useState<any[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [successMsg, setSuccessMsg] = useState(false);
@@ -49,63 +49,55 @@ export default function OgretmenlerPage() {
   const [activeClasses, setActiveClasses] = useState(0);
   const [monthlyHours, setMonthlyHours] = useState(0);
   const [status, setStatus] = useState("active");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
 
-  // Load and merge initial and custom teachers
+  const createTeacher = trpc.teachers.create.useMutation();
+
+  // Load initial teachers
   useEffect(() => {
     if (apiData) {
-      const storedCustom = localStorage.getItem("customTeachers");
-      let customList = [];
-      if (storedCustom) {
-        try {
-          customList = JSON.parse(storedCustom);
-        } catch (e) {
-          console.error(e);
-        }
-      }
-      setTeachers([...apiData, ...customList]);
+      setTeachers(apiData);
     }
   }, [apiData]);
 
-  const handleAddTeacher = (e: React.FormEvent) => {
+  const handleAddTeacher = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName) return;
 
-    const newTeacher = {
-      id: "custom-teacher-" + Date.now(),
-      full_name: fullName,
-      branch: branch,
-      active_class_count: Number(activeClasses),
-      monthly_hours: Number(monthlyHours),
-      status: status,
-      is_active: true,
-    };
+    setAdding(true);
+    setFormError(null);
 
-    const updated = [...teachers, newTeacher];
-    setTeachers(updated);
+    try {
+      await createTeacher.mutateAsync({
+        full_name: fullName,
+        branch: branch,
+        email: email || undefined,
+        password: password || undefined,
+        status: status as any,
+      });
 
-    // Save custom teacher to localStorage
-    const storedCustom = localStorage.getItem("customTeachers");
-    let customList = [];
-    if (storedCustom) {
-      try {
-        customList = JSON.parse(storedCustom);
-      } catch (e) {
-        console.error(e);
-      }
+      await refetch();
+
+      // Reset Form & Close Modal
+      setFullName("");
+      setBranch("İngilizce");
+      setActiveClasses(0);
+      setMonthlyHours(0);
+      setStatus("active");
+      setEmail("");
+      setPassword("");
+      setModalOpen(false);
+
+      setSuccessMsg(true);
+      setTimeout(() => setSuccessMsg(false), 3000);
+    } catch (err: any) {
+      setFormError(err?.message || "Öğretmen kaydedilemedi.");
+    } finally {
+      setAdding(false);
     }
-    customList.push(newTeacher);
-    localStorage.setItem("customTeachers", JSON.stringify(customList));
-
-    // Reset Form & Close Modal
-    setFullName("");
-    setBranch("İngilizce");
-    setActiveClasses(0);
-    setMonthlyHours(0);
-    setStatus("active");
-    setModalOpen(false);
-
-    setSuccessMsg(true);
-    setTimeout(() => setSuccessMsg(false), 3000);
   };
 
   return (
@@ -221,6 +213,12 @@ export default function OgretmenlerPage() {
               </button>
             </div>
             
+            {formError && (
+              <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
+                {formError}
+              </div>
+            )}
+
             <form onSubmit={handleAddTeacher} className="space-y-4 pt-4">
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Ad Soyad</label>
@@ -251,26 +249,24 @@ export default function OgretmenlerPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Aktif Dersler</label>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">E-posta</label>
                   <input 
-                    type="number" 
-                    value={activeClasses}
-                    onChange={(e) => setActiveClasses(Number(e.target.value))}
-                    min={0}
+                    type="email" 
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="ogretmen@okul.com"
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
-                    required
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Aylık Toplam Saat</label>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Şifre</label>
                   <input 
-                    type="number" 
-                    value={monthlyHours}
-                    onChange={(e) => setMonthlyHours(Number(e.target.value))}
-                    min={0}
+                    type="password" 
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
-                    required
                   />
                 </div>
               </div>
@@ -292,15 +288,17 @@ export default function OgretmenlerPage() {
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold rounded-lg transition-colors"
+                  disabled={adding}
+                  className="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
                 >
                   İptal
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-primary hover:bg-blue-600 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors"
+                  disabled={adding}
+                  className="px-4 py-2 bg-primary hover:bg-blue-600 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors disabled:opacity-50 flex items-center gap-1"
                 >
-                  Kaydet
+                  {adding ? "Kaydediliyor..." : "Kaydet"}
                 </button>
               </div>
             </form>

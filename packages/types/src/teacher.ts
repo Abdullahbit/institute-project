@@ -27,6 +27,7 @@ export const createTeacherInputSchema = z.object({
   full_name: z.string().min(1),
   branch: z.string().min(1),
   email: z.string().email().optional(),
+  password: z.string().min(6).optional(),
   phone: z.string().regex(/^\+?[1-9]\d{9,14}$/, { message: "Geçersiz telefon numarası formatı (örn: +905551234567)" }).optional(),
   status: teacherStatusSchema.default("active"),
 });

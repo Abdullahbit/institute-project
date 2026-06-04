@@ -102,7 +102,7 @@ export const teachersRouter = router({
         });
       }
 
-      // 1. Resolve matching Supabase Auth user if email is provided
+      // 1. Resolve matching Supabase Auth user if email is provided, or create if password is also provided
       let userId: string | null = null;
       if (input.email && ctx.supabase) {
         try {
@@ -110,9 +110,43 @@ export const teachersRouter = router({
           const existingUser = listData?.users?.find((u: any) => u.email === input.email);
           if (existingUser) {
             userId = existingUser.id;
+          } else if (input.password) {
+            const { data: createData, error: createError } = await ctx.supabase.auth.admin.createUser({
+              email: input.email,
+              password: input.password,
+              user_metadata: {
+                school_id: ctx.schoolId,
+                role: "teacher",
+                full_name: input.full_name,
+              },
+              email_confirm: true,
+            });
+            if (createError) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: `Failed to create auth account: ${createError.message}`,
+              });
+            }
+            if (createData.user) {
+              userId = createData.user.id;
+              
+              // Also sync profile in profiles table
+              await db.insert(profiles).values({
+                id: userId,
+                schoolId: ctx.schoolId,
+                role: "teacher",
+                fullName: input.full_name,
+                isActive: true,
+              });
+            }
           }
-        } catch (e) {
-          console.error("Failed to lookup auth user by email:", e);
+        } catch (e: any) {
+          console.error("Failed to lookup/create auth user by email:", e);
+          if (e instanceof TRPCError) throw e;
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: e?.message || "Failed to create teacher credentials",
+          });
         }
       }
 
