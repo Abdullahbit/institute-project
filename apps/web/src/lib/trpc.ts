@@ -20,10 +20,23 @@ export function createTrpcClient() {
     links: [
       httpBatchLink({
         url: `${base}/trpc`,
-        headers() {
-          return {
+        async headers() {
+          const headers: Record<string, string> = {
             "x-school-id": schoolId,
           };
+          if (typeof window !== "undefined") {
+            try {
+              const { supabase } = await import("./supabaseClient");
+              const { data: { session } } = await supabase.auth.getSession();
+              if (session?.user?.id) {
+                headers["x-user-id"] = session.user.id;
+                headers["Authorization"] = `Bearer ${session.access_token}`;
+              }
+            } catch (err) {
+              console.error("Error setting tRPC auth headers:", err);
+            }
+          }
+          return headers;
         },
       }),
     ],

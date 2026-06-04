@@ -1,7 +1,8 @@
-'use client';
+"use client";
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '../../../context/AuthContext';
 
 export default function TeacherDashboard() {
@@ -120,19 +121,19 @@ export default function TeacherDashboard() {
           </div>
         </div>
 
-        {/* Dashboard Placeholder Grid */}
+        {/* Dashboard Navigation Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-2">
-          <div className="bg-slate-900/30 border border-slate-900 rounded-2xl p-5 text-slate-500 text-xs">
+          <div className="bg-slate-900/30 border border-slate-900 hover:border-slate-800 rounded-2xl p-5 text-slate-500 text-xs transition-all">
             <span className="font-bold text-slate-400 block mb-1">📅 Personal Schedule</span>
-            View your upcoming sessions and hours. (Ready)
+            View your upcoming sessions and hours. (Coming soon)
           </div>
-          <div className="bg-slate-900/30 border border-slate-900 rounded-2xl p-5 text-slate-500 text-xs">
-            <span className="font-bold text-slate-400 block mb-1">⏱ Class Check-In</span>
-            Log check-ins and check-outs dynamically. (Ready)
-          </div>
-          <div className="bg-slate-900/30 border border-slate-900 rounded-2xl p-5 text-slate-500 text-xs">
+          <Link href="/teacher/today" className="bg-slate-900/30 border border-slate-900 hover:border-slate-800 rounded-2xl p-5 text-slate-400 text-xs transition-all hover:bg-slate-900/50 block group">
+            <span className="font-bold text-slate-200 block mb-1 group-hover:text-emerald-400 transition-colors">⏱ Class Check-In</span>
+            Log check-ins and check-outs dynamically. (Active)
+          </Link>
+          <div className="bg-slate-900/30 border border-slate-900 hover:border-slate-800 rounded-2xl p-5 text-slate-500 text-xs transition-all">
             <span className="font-bold text-slate-400 block mb-1">📊 Hour Logging</span>
-            Submit logs with append-only audit trails. (Ready)
+            Submit logs with append-only audit trails. (Coming soon)
           </div>
         </div>
       </main>

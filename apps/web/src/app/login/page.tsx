@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
-import { getSchoolSlugFromHostname } from '../../utils/trpc';
+import { getSchoolSlugFromHostname } from '../../utils/slug';
+import { trpc } from '@/lib/trpc';
 
 export default function LoginPage() {
   const { user, role, setLocalSchoolSlug } = useAuth();
@@ -14,6 +15,9 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [currentSlug, setCurrentSlug] = useState('');
   const router = useRouter();
+
+  // tRPC Mutation Hooks
+  const seedMutation = trpc.admin.seed.useMutation();
 
   useEffect(() => {
     // Check if hostname resolves subdomain or fallback to local storage
@@ -213,9 +217,8 @@ export default function LoginPage() {
                 setError(null);
                 setLoading(true);
                 try {
-                  const { trpcMutation } = await import('../../utils/trpc');
-                  const res = await trpcMutation('seed', {});
-                  alert(res.message);
+                  const res = await seedMutation.mutateAsync();
+                  alert(res.success ? 'Seeding completed!' : 'Seeding failed.');
                 } catch (err: any) {
                   setError(err?.message || 'Database seeding failed.');
                 } finally {

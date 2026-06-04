@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
 import { useRouter, usePathname } from 'next/navigation';
-import { getSchoolSlugFromHostname } from '../utils/trpc';
+import { getSchoolSlugFromHostname } from '../utils/slug';
 
 interface AuthContextType {
   user: User | null;
@@ -56,12 +56,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!slug) return;
       
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/trpc/validateInviteToken`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/trpc/auth.validateInviteToken`, {
           method: 'GET', // or simple fetch from db if public
         });
         // We will make a simple fetch or set placeholders
         // Let's set some nice default titles based on the slug
-        const capitalized = slug.split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
+        const capitalized = slug.split('-').map((s: string) => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
         setActiveSchoolName(capitalized + ' Academy');
       } catch (err) {
         console.error(err);

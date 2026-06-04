@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { trpcQuery, trpcMutation } from '../../../utils/trpc';
+import { trpc } from '@/lib/trpc';
 import { supabase } from '../../../lib/supabaseClient';
 import { useAuth } from '../../../context/AuthContext';
 
@@ -17,25 +17,23 @@ export default function InviteAcceptancePage() {
   const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
 
+  // tRPC Queries & Mutations
+  const validateQuery = trpc.auth.validateInviteToken.useQuery(
+    { token },
+    { enabled: !!token, retry: false }
+  );
+
+  const acceptMutation = trpc.auth.acceptInvitation.useMutation();
+
   useEffect(() => {
-    if (!token) return;
-
-    const validateToken = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        // Call backend token validation procedure
-        const data = await trpcQuery('validateInviteToken', { token });
-        setInviteData(data);
-      } catch (err: any) {
-        setError(err?.message || 'The invitation link is invalid or has expired.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    validateToken();
-  }, [token]);
+    if (validateQuery.data) {
+      setInviteData(validateQuery.data);
+      setLoading(false);
+    } else if (validateQuery.error) {
+      setError(validateQuery.error.message || 'The invitation link is invalid or has expired.');
+      setLoading(false);
+    }
+  }, [validateQuery.data, validateQuery.error]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,16 +51,16 @@ export default function InviteAcceptancePage() {
     setError(null);
 
     try {
-      // 1. Submit invitation acceptance to register user
-      await trpcMutation('acceptInvitation', {
+      // 1. Submit invitation acceptance to register user via real tRPC mutation
+      await acceptMutation.mutateAsync({
         token,
         fullName,
         password,
       });
 
-      // 2. Align local storage school slug with invited school slug for local development
-      if (inviteData?.schools?.slug) {
-        localStorage.setItem('x-school-slug', inviteData.schools.slug);
+      // 2. Align local storage school slug with invited school subdomain for local development
+      if (inviteData?.school?.subdomain) {
+        localStorage.setItem('x-school-slug', inviteData.school.subdomain);
       }
 
       // 3. Login the user automatically
@@ -115,7 +113,7 @@ export default function InviteAcceptancePage() {
           </div>
           <div>
             <h1 className="font-extrabold text-2xl tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
-              {inviteData?.schools?.name || 'Join LingoFlow'}
+              {inviteData?.school?.name || 'Join LingoFlow'}
             </h1>
             <p className="text-xs text-slate-500 font-semibold tracking-wider uppercase mt-1">
               Complete Account Setup
@@ -136,7 +134,7 @@ export default function InviteAcceptancePage() {
               <div className="bg-slate-950/50 rounded-xl p-4 border border-slate-900 text-xs text-slate-400 flex flex-col gap-2.5">
                 <div>
                   <span className="font-semibold text-slate-500">School Tenant:</span>{' '}
-                  <span className="text-white font-medium">{inviteData.schools?.name}</span>
+                  <span className="text-white font-medium">{inviteData.school?.name}</span>
                 </div>
                 <div>
                   <span className="font-semibold text-slate-500">Invited Role:</span>{' '}

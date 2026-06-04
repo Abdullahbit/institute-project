@@ -9,13 +9,27 @@ const schoolId =
   process.env.EXPO_PUBLIC_DEV_SCHOOL_ID ??
   "a0000000-0000-4000-8000-000000000001";
 
+let activeUserId: string | null = null;
+
+export function setActiveUserId(id: string | null) {
+  activeUserId = id;
+}
+
+export function getActiveUserId() {
+  return activeUserId;
+}
+
 export function createTrpcClient() {
   return trpc.createClient({
     links: [
       httpBatchLink({
         url: `${apiUrl}/trpc`,
         headers() {
-          return { "x-school-id": schoolId };
+          const headers: Record<string, string> = { "x-school-id": schoolId };
+          if (activeUserId) {
+            headers["x-user-id"] = activeUserId;
+          }
+          return headers;
         },
       }),
     ],

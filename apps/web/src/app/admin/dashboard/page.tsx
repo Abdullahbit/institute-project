@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../context/AuthContext';
-import { trpcMutation } from '../../../utils/trpc';
+import { trpc } from '@/lib/trpc';
 import { supabase } from '../../../lib/supabaseClient';
 
 export default function AdminDashboard() {
@@ -18,6 +18,10 @@ export default function AdminDashboard() {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
+  // tRPC Mutation Hooks
+  const seedMutation = trpc.admin.seed.useMutation();
+  const inviteMutation = trpc.admin.inviteUser.useMutation();
+
   // Protect route
   useEffect(() => {
     if (role && role !== 'admin') {
@@ -30,8 +34,8 @@ export default function AdminDashboard() {
     setError(null);
     setSeedResult(null);
     try {
-      // Execute DB Seed mutation
-      const res = await trpcMutation('seed', {});
+      // Execute DB Seed mutation via real tRPC client
+      const res = await seedMutation.mutateAsync();
       setSeedResult(res);
     } catch (err: any) {
       setError(err?.message || 'Failed to seed database.');
@@ -49,14 +53,14 @@ export default function AdminDashboard() {
     setInviteLink(null);
 
     try {
-      const res = await trpcMutation('inviteUser', {
+      const res = await inviteMutation.mutateAsync({
         email,
         role: inviteRole,
       });
 
       // Construct invite acceptance link
       const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
-      const link = `${origin}/invite/${res.token}`;
+      const link = `${origin}/invite/${res.rawToken}`;
       setInviteLink(link);
       setEmail('');
     } catch (err: any) {
