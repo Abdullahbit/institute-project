@@ -1,9 +1,12 @@
-import { router } from "../trpc/trpc";
-import { healthRouter } from "./health";
-import { dashboardRouter } from "./dashboard";
-import { teachersRouter } from "./teachers";
-import { scheduleRouter } from "./schedule";
-import { alertsRouter } from "./alerts";
+import { router } from "../trpc/trpc.js";
+import { healthRouter } from "./health.js";
+import { dashboardRouter } from "./dashboard.js";
+import { teachersRouter } from "./teachers.js";
+import { scheduleRouter } from "./schedule.js";
+import { alertsRouter } from "./alerts.js";
+import { adminRouter } from "./admin.js";
+import { authRouter } from "./auth.js";
+import { hoursRouter } from "./hours.js";
 
 export const appRouter = router({
   health: healthRouter,
@@ -11,6 +14,9 @@ export const appRouter = router({
   teachers: teachersRouter,
   schedule: scheduleRouter,
   alerts: alertsRouter,
+  admin: adminRouter,
+  auth: authRouter,
+  hours: hoursRouter,
 });
 
 export type AppRouter = typeof appRouter;

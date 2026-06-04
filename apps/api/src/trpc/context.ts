@@ -1,7 +1,7 @@
 import type { CreateFastifyContextOptions } from "@trpc/server/adapters/fastify";
-import { env } from "../lib/env";
-import { getSupabaseAdmin } from "../lib/supabase";
-import { logger } from "../lib/logger";
+import { env } from "../lib/env.js";
+import { getSupabaseAdmin } from "../lib/supabase.js";
+import { logger } from "../lib/logger.js";
 
 export type TrpcContext = {
   schoolId: string;

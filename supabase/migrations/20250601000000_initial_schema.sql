@@ -164,7 +164,7 @@ ALTER TABLE alerts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE invitations ENABLE ROW LEVEL SECURITY;
 
 -- Helper: current user's school from JWT
-CREATE OR REPLACE FUNCTION auth.user_school_id()
+CREATE OR REPLACE FUNCTION public.user_school_id()
 RETURNS UUID
 LANGUAGE sql
 STABLE
@@ -176,49 +176,49 @@ $$;
 
 -- Schools: users see only their school
 CREATE POLICY schools_select ON schools
-  FOR SELECT USING (id = auth.user_school_id());
+  FOR SELECT USING (id = public.user_school_id());
 
 CREATE POLICY profiles_select ON profiles
-  FOR SELECT USING (school_id = auth.user_school_id());
+  FOR SELECT USING (school_id = public.user_school_id());
 
 CREATE POLICY profiles_update_own ON profiles
-  FOR UPDATE USING (id = auth.uid() AND school_id = auth.user_school_id());
+  FOR UPDATE USING (id = auth.uid() AND school_id = public.user_school_id());
 
 CREATE POLICY teachers_school ON teachers
-  FOR ALL USING (school_id = auth.user_school_id())
-  WITH CHECK (school_id = auth.user_school_id());
+  FOR ALL USING (school_id = public.user_school_id())
+  WITH CHECK (school_id = public.user_school_id());
 
 CREATE POLICY students_school ON students
-  FOR ALL USING (school_id = auth.user_school_id())
-  WITH CHECK (school_id = auth.user_school_id());
+  FOR ALL USING (school_id = public.user_school_id())
+  WITH CHECK (school_id = public.user_school_id());
 
 CREATE POLICY classes_school ON classes
-  FOR ALL USING (school_id = auth.user_school_id())
-  WITH CHECK (school_id = auth.user_school_id());
+  FOR ALL USING (school_id = public.user_school_id())
+  WITH CHECK (school_id = public.user_school_id());
 
 CREATE POLICY class_enrollments_school ON class_enrollments
-  FOR ALL USING (school_id = auth.user_school_id())
-  WITH CHECK (school_id = auth.user_school_id());
+  FOR ALL USING (school_id = public.user_school_id())
+  WITH CHECK (school_id = public.user_school_id());
 
 CREATE POLICY schedule_slots_school ON schedule_slots
-  FOR ALL USING (school_id = auth.user_school_id())
-  WITH CHECK (school_id = auth.user_school_id());
+  FOR ALL USING (school_id = public.user_school_id())
+  WITH CHECK (school_id = public.user_school_id());
 
 CREATE POLICY lesson_sessions_school ON lesson_sessions
-  FOR ALL USING (school_id = auth.user_school_id())
-  WITH CHECK (school_id = auth.user_school_id());
+  FOR ALL USING (school_id = public.user_school_id())
+  WITH CHECK (school_id = public.user_school_id());
 
 CREATE POLICY hour_logs_school ON hour_logs
-  FOR ALL USING (school_id = auth.user_school_id())
-  WITH CHECK (school_id = auth.user_school_id());
+  FOR ALL USING (school_id = public.user_school_id())
+  WITH CHECK (school_id = public.user_school_id());
 
 CREATE POLICY alerts_school ON alerts
-  FOR ALL USING (school_id = auth.user_school_id())
-  WITH CHECK (school_id = auth.user_school_id());
+  FOR ALL USING (school_id = public.user_school_id())
+  WITH CHECK (school_id = public.user_school_id());
 
 CREATE POLICY invitations_school ON invitations
-  FOR ALL USING (school_id = auth.user_school_id())
-  WITH CHECK (school_id = auth.user_school_id());
+  FOR ALL USING (school_id = public.user_school_id())
+  WITH CHECK (school_id = public.user_school_id());
 
 -- Seed pilot school (Bright Minds)
 INSERT INTO schools (id, name, subdomain)

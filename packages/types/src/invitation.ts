@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { uuidSchema } from "./common";
+import { uuidSchema } from "./common.js";
 
 export const invitationRoleSchema = z.enum(["admin", "teacher", "student"]);
 
@@ -23,3 +23,10 @@ export const createInvitationInputSchema = z.object({
   role: invitationRoleSchema,
   expires_in_hours: z.number().int().min(1).max(INVITATION_MAX_HOURS).default(72),
 });
+
+export const acceptInvitationInputSchema = z.object({
+  token: z.string().min(1),
+  fullName: z.string().min(2),
+  password: z.string().min(6),
+});
+

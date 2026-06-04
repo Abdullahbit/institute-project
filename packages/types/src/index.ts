@@ -1,7 +1,10 @@
-export * from "./common";
-export * from "./school";
-export * from "./teacher";
-export * from "./schedule";
-export * from "./alert";
-export * from "./dashboard";
-export * from "./invitation";
+export * from "./common.js";
+export * from "./school.js";
+export * from "./teacher.js";
+export * from "./schedule.js";
+export * from "./alert.js";
+export * from "./dashboard.js";
+export * from "./invitation.js";
+export * from "./hours.js";
+
+

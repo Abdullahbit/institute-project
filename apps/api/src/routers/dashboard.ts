@@ -1,11 +1,11 @@
 import { dashboardSummarySchema } from "@institute/types";
-import { mockDashboard } from "../lib/mock-data";
-import { getSupabaseAdmin } from "../lib/supabase";
-import { hasSupabase } from "../lib/env";
-import { router, schoolProcedure } from "../trpc/trpc";
+import { mockDashboard } from "../lib/mock-data.js";
+import { getSupabaseAdmin } from "../lib/supabase.js";
+import { hasSupabase } from "../lib/env.js";
+import { router, schoolProcedure } from "../trpc/trpc.js";
 
 export const dashboardRouter = router({
-  summary: schoolProcedure.query(async ({ ctx }) => {
+  summary: schoolProcedure.query(async ({ ctx }: { ctx: any }) => {
     const supabase = getSupabaseAdmin();
 
     if (!hasSupabase() || !supabase) {
@@ -28,13 +28,13 @@ export const dashboardRouter = router({
       .limit(5);
 
     const activeTeachers =
-      teachers?.filter((t) => t.status === "active").length ?? 0;
+      teachers?.filter((t: any) => t.status === "active").length ?? 0;
 
     const summary = {
       ...mockDashboard,
       active_teachers: activeTeachers,
       recent_alerts:
-        alerts?.map((a) => ({
+        alerts?.map((a: any) => ({
           id: a.id,
           school_id: a.school_id,
           type: a.type,
@@ -42,9 +42,9 @@ export const dashboardRouter = router({
           teacher_name: null,
           title: a.title,
           description: a.description,
-          occurred_at: a.occurred_at,
+          occurred_at: a.occurred_at ? new Date(a.occurred_at).toISOString() : new Date().toISOString(),
           is_resolved: a.is_resolved,
-          created_at: a.created_at,
+          created_at: a.created_at ? new Date(a.created_at).toISOString() : new Date().toISOString(),
         })) ?? mockDashboard.recent_alerts,
     };
 

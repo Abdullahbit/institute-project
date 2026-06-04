@@ -1,12 +1,15 @@
 import { z } from "zod";
-import { uuidSchema } from "./common";
+import { uuidSchema } from "./common.js";
 
 export const lessonStatusSchema = z.enum([
   "scheduled",
   "in_progress",
+  "ongoing",
   "completed",
   "cancelled",
   "substitute_needed",
+  "late",
+  "no_show",
 ]);
 
 export const scheduleSlotSchema = z.object({

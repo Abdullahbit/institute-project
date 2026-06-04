@@ -1,23 +1,107 @@
 "use client";
 
+import React from "react";
 import { AdminShell } from "@/components/admin-shell";
 import { trpc } from "@/lib/trpc";
+import { useRouter } from "next/navigation";
+import { 
+  BookOpen, 
+  Users, 
+  GraduationCap, 
+  CheckCircle2, 
+  Clock, 
+  AlertCircle, 
+  UserX, 
+  CheckSquare, 
+  MessageSquare,
+  ChevronRight
+} from "lucide-react";
 
-const statusLabels: Record<string, string> = {
-  in_progress: "Devam Ediyor",
-  completed: "Tamamlandı",
-  cancelled: "İptal",
-  substitute_needed: "Vekil Bekleniyor",
-  scheduled: "Bekliyor",
-};
+function getStatusBadge(status: string) {
+  switch (status) {
+    case "in_progress":
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-700 border border-emerald-200">
+          Devam Ediyor
+        </span>
+      );
+    case "completed":
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+          Tamamlandı
+        </span>
+      );
+    case "cancelled":
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-500/15 text-red-700 border border-red-200">
+          İptal
+        </span>
+      );
+    case "substitute_needed":
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-700 border border-amber-200">
+          Vekil Bekleniyor
+        </span>
+      );
+    default:
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-50 text-slate-500 border border-slate-200">
+          Bekliyor
+        </span>
+      );
+  }
+}
+
+function getAlertConfig(type: string) {
+  switch (type) {
+    case "late_check_in":
+      return {
+        icon: Clock,
+        color: "text-orange-500",
+        bg: "bg-orange-50/10",
+        label: "Geç Giriş"
+      };
+    case "substitute_request":
+      return {
+        icon: AlertCircle,
+        color: "text-blue-500",
+        bg: "bg-blue-50/10",
+        label: "Vekil Talebi"
+      };
+    case "no_show":
+      return {
+        icon: UserX,
+        color: "text-red-500",
+        bg: "bg-red-50/10",
+        label: "Devamsızlık"
+      };
+    case "hour_approval":
+      return {
+        icon: CheckSquare,
+        color: "text-emerald-500",
+        bg: "bg-emerald-50/10",
+        label: "Saat Onayı"
+      };
+    default:
+      return {
+        icon: MessageSquare,
+        color: "text-slate-500",
+        bg: "bg-slate-50/10",
+        label: "Bildirim"
+      };
+  }
+}
 
 export default function DashboardPage() {
   const { data, isLoading, error } = trpc.dashboard.summary.useQuery();
+  const router = useRouter();
 
   if (isLoading) {
     return (
       <AdminShell title="Ana Sayfa" subtitle="Yükleniyor…">
-        <p className="text-slate-500">Veriler API&apos;den alınıyor…</p>
+        <div className="flex items-center justify-center py-20">
+          <div className="text-slate-500 font-medium">Veriler API'den alınıyor…</div>
+        </div>
       </AdminShell>
     );
   }
@@ -25,10 +109,12 @@ export default function DashboardPage() {
   if (error) {
     return (
       <AdminShell title="Ana Sayfa">
-        <p className="text-red-600">
-          API bağlantısı kurulamadı. <code>pnpm dev</code> ile API&apos;yi
-          başlatın (port 4000).
-        </p>
+        <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-red-700">
+          <h3 className="font-bold text-lg mb-2">API Bağlantı Hatası</h3>
+          <p className="text-sm">
+            API sunucusuna bağlanılamadı. Lütfen arka uç sunucusunun port 4000 üzerinde çalıştığından emin olun (<code>pnpm run dev</code>).
+          </p>
+        </div>
       </AdminShell>
     );
   }
@@ -38,65 +124,118 @@ export default function DashboardPage() {
   return (
     <AdminShell
       title="Ana Sayfa"
-      subtitle="Bright Minds Dil Okulu — canlı API verisi"
+      subtitle="Bright Minds Dil Okulu günlük özet tablosu."
     >
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      {/* Metrics Row */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
         {[
-          { label: "Bugünkü Dersler", value: summary.lessons_today },
-          { label: "Aktif Öğretmenler", value: summary.active_teachers },
-          { label: "Toplam Öğrenci", value: summary.total_students },
-          { label: "Bekleyen Onaylar", value: summary.pending_approvals },
+          { label: "Bugünkü Dersler", value: summary.lessons_today, icon: BookOpen, bg: "bg-blue-50", text: "text-blue-600" },
+          { label: "Aktif Öğretmenler", value: summary.active_teachers, icon: Users, bg: "bg-emerald-50", text: "text-emerald-600" },
+          { label: "Toplam Öğrenci", value: summary.total_students, icon: GraduationCap, bg: "bg-purple-50", text: "text-purple-600" },
+          { label: "Bekleyen Onaylar", value: summary.pending_approvals, icon: CheckCircle2, bg: "bg-amber-50", text: "text-amber-600" },
         ].map((card) => (
           <div
             key={card.label}
-            className="bg-white rounded-lg border border-slate-200 p-5 shadow-sm"
+            className="bg-white rounded-xl border border-slate-200/60 p-6 shadow-sm flex items-center gap-4 transition-all hover:shadow-md"
           >
-            <p className="text-sm text-slate-500">{card.label}</p>
-            <p className="text-2xl font-bold mt-1">{card.value}</p>
+            <div className={`p-3 rounded-lg ${card.bg} ${card.text}`}>
+              <card.icon className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-500">{card.label}</p>
+              <h3 className="text-2xl font-bold text-slate-900 mt-1">{card.value}</h3>
+            </div>
           </div>
         ))}
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        <section className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-          <h2 className="px-4 py-3 border-b font-medium">Bugünkü Program</h2>
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left">
-              <tr>
-                <th className="p-3">Saat</th>
-                <th className="p-3">Sınıf</th>
-                <th className="p-3">Öğretmen</th>
-                <th className="p-3 text-center">Öğrenci</th>
-                <th className="p-3 text-right">Durum</th>
-              </tr>
-            </thead>
-            <tbody>
-              {summary.today_schedule.map((lesson) => (
-                <tr key={lesson.id} className="border-t">
-                  <td className="p-3">{lesson.time_label}</td>
-                  <td className="p-3">{lesson.class_name}</td>
-                  <td className="p-3">{lesson.teacher_name}</td>
-                  <td className="p-3 text-center">{lesson.student_count}</td>
-                  <td className="p-3 text-right text-slate-600">
-                    {statusLabels[lesson.status] ?? lesson.status}
-                  </td>
+      {/* Main Content Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Today's Schedule Table */}
+        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden flex flex-col">
+          <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+            <h2 className="font-semibold text-lg text-slate-900">Bugünkü Program</h2>
+            <button 
+              onClick={() => router.push("/program")}
+              className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
+            >
+              Tümünü Gör <ChevronRight className="h-3 w-3" />
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-slate-50/50 border-b border-slate-100 text-slate-600 font-medium">
+                <tr>
+                  <th className="px-6 py-4">Saat</th>
+                  <th className="px-6 py-4">Sınıf</th>
+                  <th className="px-6 py-4">Öğretmen</th>
+                  <th className="px-6 py-4 text-center">Öğrenci</th>
+                  <th className="px-6 py-4 text-right">Durum</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {summary.today_schedule.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-slate-500 font-medium">
+                      Bugün için planlanmış bir ders bulunmamaktadır.
+                    </td>
+                  </tr>
+                ) : (
+                  summary.today_schedule.map((lesson) => (
+                    <tr key={lesson.id} className="hover:bg-slate-50/30 transition-colors">
+                      <td className="px-6 py-4 font-semibold text-slate-600">{lesson.time_label}</td>
+                      <td className="px-6 py-4 text-slate-950 font-medium">{lesson.class_name}</td>
+                      <td className="px-6 py-4 text-slate-600 font-medium">{lesson.teacher_name}</td>
+                      <td className="px-6 py-4 text-center text-slate-600 font-medium">{lesson.student_count}</td>
+                      <td className="px-6 py-4 text-right">{getStatusBadge(lesson.status)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
 
-        <section className="bg-white rounded-lg border border-slate-200 shadow-sm">
-          <h2 className="px-4 py-3 border-b font-medium">Son Uyarılar</h2>
-          <ul className="divide-y">
-            {summary.recent_alerts.map((alert) => (
-              <li key={alert.id} className="p-4">
-                <p className="font-medium text-sm">{alert.title}</p>
-                <p className="text-xs text-slate-500 mt-1">{alert.description}</p>
-              </li>
-            ))}
-          </ul>
-        </section>
+        {/* Recent Alerts Card */}
+        <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm p-6 flex flex-col">
+          <h2 className="font-semibold text-lg text-slate-900 mb-4 pb-1">Son Uyarılar</h2>
+          <div className="flex-1 space-y-4">
+            {summary.recent_alerts.length === 0 ? (
+              <p className="text-xs text-slate-500 text-center py-8 font-medium">Aktif uyarı bulunmuyor.</p>
+            ) : (
+              summary.recent_alerts.map((alert) => {
+                const config = getAlertConfig(alert.type);
+                return (
+                  <div 
+                    key={alert.id} 
+                    className="flex items-start gap-4 p-3 rounded-lg border border-slate-100 bg-slate-50/50 transition-colors hover:bg-slate-50"
+                  >
+                    <div className={`mt-0.5 p-2 rounded-md ${config.bg} ${config.color}`}>
+                      <config.icon className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1 space-y-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-slate-900 truncate">{config.label}</p>
+                        <span className="text-[10px] text-slate-400 font-medium">
+                          {new Date(alert.occurred_at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 leading-relaxed break-words">
+                        <span className="font-semibold text-slate-700">{alert.teacher_name || "Sistem"}</span>: {alert.description}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+          <button 
+            onClick={() => router.push("/uyarilar")}
+            className="w-full mt-4 py-2.5 border border-slate-200/80 rounded-lg text-xs font-semibold text-primary hover:bg-blue-50 transition-colors"
+          >
+            Tüm Uyarıları Görüntüle
+          </button>
+        </div>
       </div>
     </AdminShell>
   );

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { uuidSchema } from "./common";
+import { uuidSchema } from "./common.js";
 
 export const teacherStatusSchema = z.enum(["active", "on_leave", "inactive"]);
 

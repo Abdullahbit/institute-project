@@ -1,5 +1,5 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { supabase } from '../index';
+import { getSupabaseAdmin } from '../lib/supabase.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -44,6 +44,12 @@ export async function tenantResolution(req: FastifyRequest, reply: FastifyReply)
     return;
   }
 
+  const supabase = getSupabaseAdmin();
+  if (!supabase) {
+    reply.status(500).send({ error: 'Supabase client not initialized' });
+    return;
+  }
+
   // Query schools table to verify tenant exists
   const { data: school, error } = await supabase
     .from('schools')
@@ -52,7 +58,7 @@ export async function tenantResolution(req: FastifyRequest, reply: FastifyReply)
     .single();
 
   if (error || !school) {
-    reply.status(444 || 404).code(404).send({ error: `Tenant school '${slug}' not found` });
+    reply.status(404).code(404).send({ error: `Tenant school '${slug}' not found` });
     return;
   }
 

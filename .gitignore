@@ -55,6 +55,11 @@ Thumbs.db
 # Nested duplicate clone (do not commit)
 Turkish-Admin-Panel/
 
+# Local / partner docs (not in repo)
+.gemini/
+*.docx
+~$*
+
 # Replit
 .cache/
 .local/

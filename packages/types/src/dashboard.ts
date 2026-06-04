@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { alertSchema } from "./alert";
-import { todayLessonSchema } from "./schedule";
+import { alertSchema } from "./alert.js";
+import { todayLessonSchema } from "./schedule.js";
 
 export const dashboardSummarySchema = z.object({
   lessons_today: z.number().int().nonnegative(),

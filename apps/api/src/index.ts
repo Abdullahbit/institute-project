@@ -1,6 +1,6 @@
-import { env } from "./lib/env";
-import { logger } from "./lib/logger";
-import { buildServer } from "./server";
+import { env } from "./lib/env.js";
+import { logger } from "./lib/logger.js";
+import { buildServer } from "./server.js";
 
 async function main() {
   const app = await buildServer();
