@@ -22,6 +22,7 @@ const navItems = [
   { href: "/", label: "Ana Sayfa", icon: Home },
   { href: "/program", label: "Program", icon: Calendar },
   { href: "/ogretmenler", label: "Öğretmenler", icon: Users },
+  { href: "/ogrenciler", label: "Öğrenciler", icon: GraduationCap },
   { href: "/saat-takibi", label: "Saat Takibi", icon: Clock },
   { href: "/uyarilar", label: "Uyarılar", icon: Bell },
   { href: "/ayarlar", label: "Ayarlar", icon: Settings },
