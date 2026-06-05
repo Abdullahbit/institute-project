@@ -3,10 +3,11 @@
 import React, { useState, useEffect } from "react";
 import { AdminShell } from "@/components/admin-shell";
 import { trpc } from "@/lib/trpc";
-import { UserPlus, Eye, Pencil, X, Check, Loader2 } from "lucide-react";
+import { UserPlus, Eye, Pencil, X, Check, Loader2, Calendar } from "lucide-react";
 
 export default function OgrencilerPage() {
   const { data: apiData, isLoading, error, refetch } = trpc.students.list.useQuery();
+  const { data: classesData } = trpc.classes.list.useQuery();
   const [students, setStudents] = useState<any[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [successMsg, setSuccessMsg] = useState(false);
@@ -17,6 +18,15 @@ export default function OgrencilerPage() {
   const [password, setPassword] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+
+  // Class assignment states
+  const enrollStudent = trpc.classes.enrollStudent.useMutation();
+  const unenrollStudent = trpc.classes.unenrollStudent.useMutation();
+  const [classModalOpen, setClassModalOpen] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<any | null>(null);
+  const [targetClassId, setTargetClassId] = useState("");
+  const [classError, setClassError] = useState<string | null>(null);
+  const [classSaving, setClassSaving] = useState(false);
 
   const createStudent = trpc.students.create.useMutation();
 
@@ -55,6 +65,48 @@ export default function OgrencilerPage() {
       setFormError(err?.message || "Öğrenci kaydedilemedi.");
     } finally {
       setAdding(false);
+    }
+  };
+
+  const handleOpenClassModal = (student: any) => {
+    setSelectedStudent(student);
+    setTargetClassId(student.class_id || "");
+    setClassError(null);
+    setClassModalOpen(true);
+  };
+
+  const handleSaveClass = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStudent) return;
+
+    setClassSaving(true);
+    setClassError(null);
+
+    try {
+      // If student is currently in a class, and targetClassId is empty or changed:
+      if (selectedStudent.class_id && selectedStudent.class_id !== targetClassId) {
+        await unenrollStudent.mutateAsync({
+          class_id: selectedStudent.class_id,
+          student_id: selectedStudent.id,
+        });
+      }
+
+      // If new class is selected:
+      if (targetClassId) {
+        await enrollStudent.mutateAsync({
+          class_id: targetClassId,
+          student_id: selectedStudent.id,
+        });
+      }
+
+      await refetch();
+      setClassModalOpen(false);
+      setSelectedStudent(null);
+      setTargetClassId("");
+    } catch (err: any) {
+      setClassError(err?.message || "Sınıf ataması gerçekleştirilemedi.");
+    } finally {
+      setClassSaving(false);
     }
   };
 
@@ -106,6 +158,7 @@ export default function OgrencilerPage() {
                 <tr>
                   <th className="px-6 py-4">Ad Soyad</th>
                   <th className="px-6 py-4">Rol</th>
+                  <th className="px-6 py-4">Kayıtlı Sınıf</th>
                   <th className="px-6 py-4">Durum</th>
                   <th className="px-6 py-4 text-right">İşlemler</th>
                 </tr>
@@ -113,7 +166,7 @@ export default function OgrencilerPage() {
               <tbody className="divide-y divide-slate-100">
                 {students.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-6 py-8 text-center text-slate-500 font-medium">
+                    <td colSpan={5} className="px-6 py-8 text-center text-slate-500 font-medium">
                       Kayıtlı öğrenci bulunmamaktadır.
                     </td>
                   </tr>
@@ -123,19 +176,27 @@ export default function OgrencilerPage() {
                       <td className="px-6 py-4 font-bold text-slate-900">{s.full_name}</td>
                       <td className="px-6 py-4 text-slate-600 font-medium">Öğrenci</td>
                       <td className="px-6 py-4">
+                        {s.class_name ? (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-primary/10 text-primary border border-primary/20">
+                            {s.class_name}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 text-xs italic font-medium">Sınıf Atanmamış</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-700 border border-emerald-200">
                           Aktif
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <button className="inline-flex items-center gap-1 border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-800 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg transition-colors">
-                            <Eye className="h-3.5 w-3.5" />
-                            Görüntüle
-                          </button>
-                          <button className="inline-flex items-center gap-1 border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-800 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg transition-colors">
-                            <Pencil className="h-3.5 w-3.5" />
-                            Düzenle
+                          <button 
+                            onClick={() => handleOpenClassModal(s)}
+                            className="inline-flex items-center gap-1 border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-800 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg transition-colors"
+                          >
+                            <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                            Sınıf Atama
                           </button>
                         </div>
                       </td>
@@ -144,6 +205,85 @@ export default function OgrencilerPage() {
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Sınıf Atama Modali */}
+      {classModalOpen && selectedStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div 
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm"
+            onMouseDown={() => setClassModalOpen(false)}
+          />
+          <div 
+            className="relative bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-200"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <h3 className="font-bold text-slate-900 text-lg">Sınıf Yönetimi</h3>
+              <button 
+                onClick={() => setClassModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="my-4">
+              <p className="text-xs text-slate-500 font-medium">
+                <span className="font-bold text-slate-800">{selectedStudent.full_name}</span> adlı öğrenciyi bir sınıfa kaydedebilir veya sınıf kaydını güncelleyebilirsiniz.
+              </p>
+            </div>
+            
+            {classError && (
+              <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
+                {classError}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveClass} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Sınıf Seçin</label>
+                <select
+                  value={targetClassId}
+                  onChange={(e) => setTargetClassId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
+                >
+                  <option value="">Sınıf Atama Yok (Sınıfsız)</option>
+                  {classesData?.map((cls) => (
+                    <option key={cls.id} value={cls.id}>
+                      {cls.name} ({cls.levelCode})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setClassModalOpen(false)}
+                  disabled={classSaving}
+                  className="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
+                >
+                  İptal
+                </button>
+                <button
+                  type="submit"
+                  disabled={classSaving}
+                  className="px-4 py-2 bg-primary hover:bg-blue-600 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {classSaving ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Kaydediliyor...
+                    </>
+                  ) : (
+                    "Değişiklikleri Kaydet"
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

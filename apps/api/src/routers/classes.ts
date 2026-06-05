@@ -3,12 +3,13 @@ import {
   createClassInputSchema, 
   updateClassInputSchema, 
   createSlotInputSchema, 
-  updateSlotInputSchema 
+  updateSlotInputSchema,
+  enrollStudentInputSchema
 } from "@institute/types";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { db } from "@workspace/db";
-import { classes, scheduleSlots, profiles, teachers } from "@workspace/db/schema";
+import { classes, scheduleSlots, profiles, teachers, classEnrollments, students } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 
 export const classesRouter = router({
@@ -440,5 +441,158 @@ export const classesRouter = router({
       }
 
       return { success: true };
+    }),
+
+  // Student Enrollment management
+  enrollStudent: schoolProcedure
+    .input(enrollStudentInputSchema)
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.userId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Authentication required",
+        });
+      }
+
+      // Admin check
+      const [caller] = await db
+        .select()
+        .from(profiles)
+        .where(eq(profiles.id, ctx.userId))
+        .limit(1);
+
+      if (!caller || caller.role !== "admin") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only administrators can enroll students",
+        });
+      }
+
+      // Check if student exists
+      const [std] = await db
+        .select()
+        .from(students)
+        .where(and(eq(students.id, input.student_id), eq(students.schoolId, ctx.schoolId)))
+        .limit(1);
+
+      if (!std) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Student not found",
+        });
+      }
+
+      // Check if student already enrolled in this class and active
+      const [existing] = await db
+        .select()
+        .from(classEnrollments)
+        .where(
+          and(
+            eq(classEnrollments.classId, input.class_id),
+            eq(classEnrollments.studentId, input.student_id),
+            eq(classEnrollments.schoolId, ctx.schoolId),
+            eq(classEnrollments.isActive, true)
+          )
+        )
+        .limit(1);
+
+      if (existing) {
+        return { success: true, message: "Student already enrolled" };
+      }
+
+      // Check if they have an inactive enrollment, and reactivate it, otherwise insert new
+      const [inactive] = await db
+        .select()
+        .from(classEnrollments)
+        .where(
+          and(
+            eq(classEnrollments.classId, input.class_id),
+            eq(classEnrollments.studentId, input.student_id),
+            eq(classEnrollments.schoolId, ctx.schoolId),
+            eq(classEnrollments.isActive, false)
+          )
+        )
+        .limit(1);
+
+      if (inactive) {
+        await db
+          .update(classEnrollments)
+          .set({ isActive: true })
+          .where(eq(classEnrollments.id, inactive.id));
+      } else {
+        await db.insert(classEnrollments).values({
+          schoolId: ctx.schoolId,
+          classId: input.class_id,
+          studentId: input.student_id,
+          isActive: true,
+        });
+      }
+
+      return { success: true };
+    }),
+
+  unenrollStudent: schoolProcedure
+    .input(enrollStudentInputSchema)
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.userId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Authentication required",
+        });
+      }
+
+      // Admin check
+      const [caller] = await db
+        .select()
+        .from(profiles)
+        .where(eq(profiles.id, ctx.userId))
+        .limit(1);
+
+      if (!caller || caller.role !== "admin") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only administrators can unenroll students",
+        });
+      }
+
+      await db
+        .update(classEnrollments)
+        .set({ isActive: false })
+        .where(
+          and(
+            eq(classEnrollments.classId, input.class_id),
+            eq(classEnrollments.studentId, input.student_id),
+            eq(classEnrollments.schoolId, ctx.schoolId)
+          )
+        );
+
+      return { success: true };
+    }),
+
+  listClassStudents: schoolProcedure
+    .input(z.object({ class_id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      // Find students who have active enrollment in target class
+      const rows = await db
+        .select({
+          id: students.id,
+          fullName: students.fullName,
+        })
+        .from(students)
+        .innerJoin(classEnrollments, eq(classEnrollments.studentId, students.id))
+        .where(
+          and(
+            eq(classEnrollments.classId, input.class_id),
+            eq(classEnrollments.schoolId, ctx.schoolId),
+            eq(classEnrollments.isActive, true),
+            eq(students.isActive, true)
+          )
+        )
+        .orderBy(students.fullName);
+
+      return rows.map((r) => ({
+        id: r.id,
+        full_name: r.fullName,
+      }));
     }),
 });

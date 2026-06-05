@@ -1,6 +1,7 @@
 import { router, publicProcedure, schoolProcedure } from "../trpc/trpc.js";
 import { createInvitationInputSchema } from "@institute/types";
 import { TRPCError } from "@trpc/server";
+import { z } from "zod";
 import { db } from "@workspace/db";
 import { schools, profiles, invitations } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
@@ -49,8 +50,8 @@ export const adminRouter = router({
       });
     }
 
-    const adminEmail = "admin@school-a.com";
-    const adminPassword = "password123";
+    const adminEmail = "simaalouzi@gmail.com";
+    const adminPassword = "SimaEdu2026!";
 
     // 3. Create or update tenant administrator in Supabase Auth via Admin API
     let authUser;
@@ -71,7 +72,7 @@ export const adminRouter = router({
           user_metadata: {
             school_id: schoolAId,
             role: "admin",
-            full_name: "Alpha School Admin",
+            full_name: "Sima Admin",
           },
         }
       );
@@ -89,7 +90,7 @@ export const adminRouter = router({
         user_metadata: {
           school_id: schoolAId,
           role: "admin",
-          full_name: "Alpha School Admin",
+          full_name: "Sima Admin",
         },
         email_confirm: true,
       });
@@ -107,14 +108,14 @@ export const adminRouter = router({
       id: authUser.id,
       schoolId: schoolAId,
       role: "admin",
-      fullName: "Alpha School Admin",
+      fullName: "Sima Admin",
       isActive: true,
     }).onConflictDoUpdate({
       target: profiles.id,
       set: {
         schoolId: schoolAId,
         role: "admin",
-        fullName: "Alpha School Admin",
+        fullName: "Sima Admin",
         isActive: true,
         updatedAt: new Date(),
       }
@@ -177,5 +178,112 @@ export const adminRouter = router({
         role: input.role,
         expiresAt: expiresAt.toISOString(),
       };
+    }),
+
+  createSchoolAndAdmin: publicProcedure
+    .input(z.object({
+      name: z.string().min(1),
+      subdomain: z.string().min(1),
+      adminEmail: z.string().email(),
+      adminPassword: z.string().min(6),
+      adminFullName: z.string().min(1)
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // 1. Check if subdomain is unique
+      const existingSchool = await db.select().from(schools).where(eq(schools.subdomain, input.subdomain.toLowerCase())).limit(1);
+      if (existingSchool.length > 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Bu alt alan adı (subdomain) zaten kullanımda.",
+        });
+      }
+
+      // 2. Insert School
+      const [newSchool] = await db.insert(schools).values({
+        name: input.name,
+        subdomain: input.subdomain.toLowerCase(),
+        isActive: true,
+      }).returning();
+
+      if (!ctx.supabase) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Supabase client not initialized",
+        });
+      }
+
+      // 3. Create user in Supabase Auth
+      const { data: createData, error: createError } = await ctx.supabase.auth.admin.createUser({
+        email: input.adminEmail,
+        password: input.adminPassword,
+        user_metadata: {
+          school_id: newSchool.id,
+          role: "admin",
+          full_name: input.adminFullName,
+        },
+        email_confirm: true,
+      });
+
+      if (createError) {
+        // Rollback school insert
+        await db.delete(schools).where(eq(schools.id, newSchool.id));
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Kullanıcı oluşturulamadı: ${createError.message}`,
+        });
+      }
+
+      const authUser = createData.user;
+
+      // 4. Sync profile into profiles table
+      await db.insert(profiles).values({
+        id: authUser.id,
+        schoolId: newSchool.id,
+        role: "admin",
+        fullName: input.adminFullName,
+        isActive: true,
+      });
+
+      return {
+        success: true,
+        schoolId: newSchool.id,
+        adminId: authUser.id,
+      };
+    }),
+
+  listSchools: publicProcedure
+    .query(async ({ ctx }) => {
+      const allSchools = await db.select().from(schools);
+      const allProfiles = await db.select().from(profiles).where(eq(profiles.role, "admin"));
+      
+      let authUsers: any[] = [];
+      if (ctx.supabase) {
+        const { data: listData } = await ctx.supabase.auth.admin.listUsers();
+        if (listData?.users) {
+          authUsers = listData.users;
+        }
+      }
+
+      return allSchools.map((school) => {
+        // Find admins for this school
+        const schoolAdmins = allProfiles.filter((p) => p.schoolId === school.id);
+        const adminsDetail = schoolAdmins.map((admin) => {
+          const authUser = authUsers.find((u) => u.id === admin.id);
+          return {
+            id: admin.id,
+            fullName: admin.fullName,
+            email: authUser?.email || "Bilinmiyor",
+          };
+        });
+
+        return {
+          id: school.id,
+          name: school.name,
+          subdomain: school.subdomain,
+          isActive: school.isActive,
+          createdAt: school.createdAt,
+          admins: adminsDetail,
+        };
+      });
     }),
 });

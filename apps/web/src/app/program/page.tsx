@@ -63,6 +63,7 @@ function getLessonTheme(className: string) {
 
 export default function ProgramPage() {
   const { data: apiData, isLoading, error } = trpc.schedule.list.useQuery();
+  const { data: teachersList } = trpc.teachers.list.useQuery();
   const [lessons, setLessons] = useState<any[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [successMsg, setSuccessMsg] = useState(false);
@@ -376,15 +377,20 @@ export default function ProgramPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Öğretmen Adı</label>
-                <input 
-                  type="text" 
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Öğretmen Seçin</label>
+                <select 
                   value={teacherName}
                   onChange={(e) => setTeacherName(e.target.value)}
-                  placeholder="örn: Ahmet Yılmaz"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium cursor-pointer"
                   required
-                />
+                >
+                  <option value="">Öğretmen Seçin</option>
+                  {teachersList?.map((t) => (
+                    <option key={t.id} value={t.full_name}>
+                      {t.full_name} ({t.branch})
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

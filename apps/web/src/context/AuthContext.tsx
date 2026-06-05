@@ -118,6 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Route checks
     const isAdminRoute = pathname.startsWith('/admin');
     const isTeacherRoute = pathname.startsWith('/teacher');
+    const isStudentRoute = pathname.startsWith('/student');
     const isLoginOrInviteRoute = pathname.startsWith('/login') || pathname.startsWith('/invite');
 
     if (!user) {
@@ -128,13 +129,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Role-based protection
-    if (currentRole === 'teacher' && !isTeacherRoute && !isLoginOrInviteRoute) {
-      router.push('/teacher/dashboard');
-      return;
+    if (currentRole === 'student') {
+      if (!isStudentRoute && !isLoginOrInviteRoute) {
+        router.push('/student/dashboard');
+        return;
+      }
+    }
+
+    if (currentRole === 'teacher') {
+      if (!isTeacherRoute && !isLoginOrInviteRoute) {
+        router.push('/teacher/dashboard');
+        return;
+      }
     }
 
     if (currentRole === 'admin') {
-      if (isTeacherRoute) {
+      if (isTeacherRoute || isStudentRoute) {
         router.push(slug ? '/' : '/admin/dashboard');
         return;
       }

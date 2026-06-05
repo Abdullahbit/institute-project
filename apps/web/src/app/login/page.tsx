@@ -6,9 +6,11 @@ import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import { getSchoolSlugFromHostname } from '../../utils/slug';
 import { trpc } from '@/lib/trpc';
+import Image from 'next/image';
+import { Mail, Lock, Loader2, Sparkles, ShieldAlert, Check, Globe } from 'lucide-react';
 
 export default function LoginPage() {
-  const { user, role, setLocalSchoolSlug } = useAuth();
+  const { user, role, loading: authLoading, setLocalSchoolSlug } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -24,8 +26,8 @@ export default function LoginPage() {
     const slug = getSchoolSlugFromHostname() || '';
     setCurrentSlug(slug);
 
-    // If already logged in, redirect to correct workspace
-    if (user && role) {
+    // If already logged in and auth finished loading, redirect to correct workspace
+    if (!authLoading && user && role) {
       if (role === 'admin') {
         if (slug) {
           router.push('/');
@@ -34,14 +36,16 @@ export default function LoginPage() {
         }
       } else if (role === 'teacher') {
         router.push('/teacher/dashboard');
+      } else if (role === 'student') {
+        router.push('/student/dashboard');
       }
     }
-  }, [user, role, router]);
+  }, [user, role, authLoading, router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
-      setError('Please fill in all credentials.');
+      setError('Lütfen tüm giriş alanlarını doldurun.');
       return;
     }
 
@@ -55,14 +59,14 @@ export default function LoginPage() {
       });
 
       if (authErr) {
-        setError(authErr.message);
+        setError(authErr.message === 'Invalid login credentials' ? 'Geçersiz e-posta veya şifre.' : authErr.message);
         setLoading(false);
         return;
       }
 
       const u = data.user;
       if (!u) {
-        setError('Authentication failed. No user object returned.');
+        setError('Kimlik doğrulama başarısız oldu.');
         setLoading(false);
         return;
       }
@@ -71,16 +75,13 @@ export default function LoginPage() {
       const isActive = u.user_metadata?.is_active ?? true;
       if (!isActive) {
         await supabase.auth.signOut();
-        setError('Your account is currently inactive. Please contact your administrator.');
+        setError('Hesabınız şu anda aktif değil. Lütfen yöneticinizle iletişime geçin.');
         setLoading(false);
         return;
       }
 
       const userRole = u.user_metadata?.role;
-      const userSchoolId = u.user_metadata?.school_id;
 
-      // Local testing: save matching tenant slug to local storage to simulate matching subdomain
-      // In a production server, the subdomain resolver validates this.
       if (userRole === 'admin') {
         if (currentSlug) {
           router.push('/');
@@ -89,12 +90,14 @@ export default function LoginPage() {
         }
       } else if (userRole === 'teacher') {
         router.push('/teacher/dashboard');
+      } else if (userRole === 'student') {
+        router.push('/student/dashboard');
       } else {
-        setError('Unauthorized: Unknown user role.');
+        setError('Yetkisiz: Bilinmeyen kullanıcı rolü.');
         await supabase.auth.signOut();
       }
     } catch (err: any) {
-      setError(err?.message || 'An unexpected error occurred during login.');
+      setError(err?.message || 'Giriş yapılırken beklenmedik bir hata oluştu.');
     } finally {
       setLoading(false);
     }
@@ -106,137 +109,126 @@ export default function LoginPage() {
 
   const schoolTitle = currentSlug
     ? currentSlug.split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ')
-    : 'LingoFlow Portal';
+    : 'EduPanel Portal';
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 px-4 relative overflow-hidden">
-      {/* Soft glowing ambient backgrounds */}
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-violet-600/10 blur-[100px] pointer-events-none"></div>
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full bg-indigo-600/10 blur-[100px] pointer-events-none"></div>
+    <div className="min-h-screen bg-[#090A0F] text-white flex flex-col lg:grid lg:grid-cols-12 overflow-x-hidden">
+      
+      {/* SOL PANEL (Form & Switcher) - 40% Width on Large Screens */}
+      <div className="lg:col-span-5 flex flex-col justify-between p-6 sm:p-12 min-h-screen z-10 relative bg-[#0D0E14] border-r border-slate-900">
+        
+        {/* Soft glowing ambient backgrounds on the left */}
+        <div className="absolute top-1/4 left-1/4 w-72 h-72 rounded-full bg-violet-600/5 blur-[80px] pointer-events-none"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-72 h-72 rounded-full bg-indigo-600/5 blur-[80px] pointer-events-none"></div>
 
-      <div className="max-w-md w-full z-10">
-        {/* Header Branding */}
-        <div className="flex flex-col items-center gap-3 mb-8 text-center">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-600 flex items-center justify-center font-bold text-2xl text-white shadow-xl shadow-violet-500/15">
-            LF
+        {/* Top Logo branding */}
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-violet-600 to-indigo-600 flex items-center justify-center font-bold text-lg text-white shadow-lg shadow-violet-500/10">
+            EP
           </div>
-          <div>
-            <h1 className="font-extrabold text-2xl tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
-              {schoolTitle}
-            </h1>
-            <p className="text-xs text-slate-500 font-semibold tracking-wider uppercase mt-1">
-              {currentSlug ? `Multi-Tenant Tenant: ${currentSlug}` : 'Language Institute Portal'}
-            </p>
-          </div>
+          <span className="text-lg font-bold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
+            EduPanel
+          </span>
         </div>
 
-        {/* Glassmorphic Login Card */}
-        <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-8 shadow-2xl shadow-black/40">
-          <h2 className="text-xl font-bold text-white mb-6">Sign In</h2>
-          
+        {/* Center Login Form */}
+        <div className="my-auto py-8 max-w-sm w-full mx-auto">
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold tracking-tight text-white mb-1.5">Giriş Yap</h2>
+            <p className="text-xs text-slate-450 font-semibold uppercase tracking-wider">
+              {currentSlug ? `Okul Girişi: ${schoolTitle}` : 'Eğitim Yönetim Portalı'}
+            </p>
+          </div>
+
           {error && (
-            <div className="mb-6 p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-semibold">
-              {error}
+            <div className="mb-5 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-semibold flex items-center gap-2">
+              <ShieldAlert className="h-4 w-4 shrink-0" />
+              <span>{error}</span>
             </div>
           )}
 
-          <form onSubmit={handleLogin} className="flex flex-col gap-5">
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-                Email Address
+          <form onSubmit={handleLogin} className="flex flex-col gap-4">
+            <div className="space-y-1">
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                E-posta Adresi
               </label>
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="teacher@school.com"
-                className="w-full bg-slate-950/70 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-violet-500 transition-colors"
-                required
-              />
+              <div className="relative">
+                <Mail className="absolute left-3.5 top-3.5 h-4.5 w-4.5 text-slate-600" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="name@school.com"
+                  className="w-full bg-[#14151F] border border-slate-850 rounded-xl pl-11 pr-4 py-3 text-sm text-white placeholder-slate-650 focus:outline-none focus:border-violet-500 transition-colors font-medium"
+                  required
+                />
+              </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-                Password
+            <div className="space-y-1">
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                Şifre
               </label>
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full bg-slate-950/70 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-violet-500 transition-colors"
-                required
-              />
+              <div className="relative">
+                <Lock className="absolute left-3.5 top-3.5 h-4.5 w-4.5 text-slate-600" />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full bg-[#14151F] border border-slate-850 rounded-xl pl-11 pr-4 py-3 text-sm text-white placeholder-slate-650 focus:outline-none focus:border-violet-500 transition-colors font-medium"
+                  required
+                />
+              </div>
             </div>
 
             <button
               type="submit"
-              disabled={loading}
-              className="mt-2 w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-sm font-bold py-3.5 px-4 rounded-xl transition-all shadow-lg shadow-violet-500/15 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none"
+              disabled={loading || authLoading}
+              className="mt-2 w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-bold py-3.5 px-4 rounded-xl transition-all shadow-lg shadow-violet-500/10 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-1.5"
             >
-              {loading ? 'Authenticating...' : 'Sign In'}
+              {(loading || authLoading) && <Loader2 className="h-4 w-4 animate-spin" />}
+              {loading ? 'Giriş Yapılıyor...' : 'Giriş Yap'}
             </button>
           </form>
         </div>
 
-        {/* Localhost Multi-Tenant Domain Switcher Helper (Crucial for Local testing!) */}
-        <div className="mt-8 text-center bg-slate-900/30 border border-slate-800/40 rounded-2xl p-4 flex flex-col gap-3">
-          <div>
-            <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wider mb-2">
-              Local Dev Tenant Switcher
+        {/* Empty space/footer */}
+        <div className="pt-6 border-t border-slate-900/10 flex flex-col gap-2 max-w-sm w-full mx-auto">
+          <p className="text-[10px] text-center text-slate-600 font-medium">
+            EduPanel © 2026. Tüm hakları saklıdır.
+          </p>
+        </div>
+      </div>
+
+      {/* SAĞ PANEL (Görsel & İllüstrasyon) - 60% Width on Large Screens */}
+      <div className="hidden lg:col-span-7 bg-gradient-to-br from-[#7C3AED] via-[#6D28D9] to-[#4C1D95] lg:flex flex-col justify-start pt-20 items-center p-12 relative overflow-hidden">
+        
+        {/* Abstract shapes & lights */}
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] rounded-full bg-white/5 blur-[120px] pointer-events-none -translate-y-1/2 translate-x-1/2"></div>
+        <div className="absolute bottom-0 left-0 w-[500px] h-[500px] rounded-full bg-violet-900/40 blur-[120px] pointer-events-none translate-y-1/2 -translate-x-1/2"></div>
+
+        {/* Content Box */}
+        <div className="max-w-4xl w-full text-center flex flex-col items-center gap-8 z-10 animate-in fade-in zoom-in-95 duration-500">
+          <div className="space-y-3">
+            <h1 className="text-4xl font-extrabold tracking-tight text-white leading-none">
+              Welcome to student portal
+            </h1>
+            <p className="text-sm text-violet-100 max-w-md leading-relaxed font-medium">
+              Giriş yapın ve ders programınızı, ders saat raporlarınızı ve karne gelişim grafiklerinizi hemen izlemeye başlayın.
             </p>
-            <div className="flex gap-2 justify-center">
-              <button
-                onClick={() => handleSlugSwitch('school-a')}
-                className={`text-xs px-3 py-1.5 rounded-lg border font-bold transition-all ${
-                  currentSlug === 'school-a'
-                    ? 'bg-violet-500/10 border-violet-500/30 text-violet-400'
-                    : 'bg-slate-950/40 border-slate-900 text-slate-500 hover:text-slate-400'
-                }`}
-              >
-                School A
-              </button>
-              <button
-                onClick={() => handleSlugSwitch('school-b')}
-                className={`text-xs px-3 py-1.5 rounded-lg border font-bold transition-all ${
-                  currentSlug === 'school-b'
-                    ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400'
-                    : 'bg-slate-950/40 border-slate-900 text-slate-500 hover:text-slate-400'
-                }`}
-              >
-                School B
-              </button>
-              <button
-                onClick={() => handleSlugSwitch('')}
-                className={`text-xs px-3 py-1.5 rounded-lg border font-bold transition-all ${
-                  !currentSlug
-                    ? 'bg-slate-500/10 border-slate-500/30 text-slate-400'
-                    : 'bg-slate-950/40 border-slate-900 text-slate-500 hover:text-slate-400'
-                }`}
-              >
-                Reset
-              </button>
-            </div>
           </div>
 
-          <div className="border-t border-slate-900 pt-2.5">
-            <button
-              onClick={async () => {
-                setError(null);
-                setLoading(true);
-                try {
-                  const res = await seedMutation.mutateAsync();
-                  alert(res.success ? 'Seeding completed!' : 'Seeding failed.');
-                } catch (err: any) {
-                  setError(err?.message || 'Database seeding failed.');
-                } finally {
-                  setLoading(false);
-                }
-              }}
-              className="text-[11px] font-bold bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-xl transition-all shadow-md active:scale-[0.98]"
-            >
-              ⚡ Seed Database Sandbox
-            </button>
+          {/* Premium Framed Illustration Card */}
+          <div className="relative w-full max-w-[740px] aspect-[4/3] rounded-2xl overflow-hidden bg-white/5 backdrop-blur-md border border-white/10 shadow-2xl p-4 flex items-center justify-center transform hover:scale-[1.01] transition-transform">
+            <Image
+              src="/login_page_illustration.png"
+              alt="Student Portal Illustration"
+              width={700}
+              height={525}
+              className="object-contain drop-shadow-xl rounded-xl"
+              priority
+            />
           </div>
         </div>
       </div>

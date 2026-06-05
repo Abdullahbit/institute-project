@@ -18,7 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 
-const navItems = [
+const adminNavItems = [
   { href: "/", label: "Ana Sayfa", icon: Home },
   { href: "/program", label: "Program", icon: Calendar },
   { href: "/ogretmenler", label: "Öğretmenler", icon: Users },
@@ -26,6 +26,20 @@ const navItems = [
   { href: "/saat-takibi", label: "Saat Takibi", icon: Clock },
   { href: "/uyarilar", label: "Uyarılar", icon: Bell },
   { href: "/ayarlar", label: "Ayarlar", icon: Settings },
+];
+
+const founderNavItems = [
+  { href: "/", label: "Ana Sayfa", icon: Home },
+  { href: "/ayarlar", label: "Ayarlar", icon: Settings },
+];
+
+const teacherNavItems = [
+  { href: "/teacher/dashboard", label: "Ana Sayfa", icon: Home },
+  { href: "/teacher/today", label: "Bugünkü Derslerim", icon: Calendar },
+];
+
+const studentNavItems = [
+  { href: "/student/dashboard", label: "Ana Sayfa", icon: Home },
 ];
 
 export function AdminShell({
@@ -41,7 +55,18 @@ export function AdminShell({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [schoolName, setSchoolName] = useState("Bright Minds");
   const [schoolType, setSchoolType] = useState("Dil Okulu");
-  const { logout } = useAuth();
+  const { logout, role, user } = useAuth();
+
+  const isFounder = user?.email === "simaalouzi@gmail.com";
+
+  const currentNavItems = 
+    role === "student" 
+      ? studentNavItems 
+      : role === "teacher" 
+        ? teacherNavItems 
+        : isFounder
+          ? founderNavItems
+          : adminNavItems;
 
   React.useEffect(() => {
     const loadIdentity = () => {
@@ -64,13 +89,24 @@ export function AdminShell({
   }, []);
 
   const getInitials = (name: string) => {
+    if (!name) return "U";
     return name
-      .split(" ")
+      .trim()
+      .split(/\s+/)
       .map((word) => word.charAt(0))
       .join("")
       .substring(0, 2)
       .toUpperCase();
   };
+
+  const displayName = user?.user_metadata?.full_name || user?.email || "Kullanıcı";
+  const displayRole = role === "admin" 
+    ? "Yönetici" 
+    : role === "teacher" 
+      ? "Eğitmen" 
+      : role === "student" 
+        ? "Öğrenci" 
+        : "Kullanıcı";
 
   const sidebarContent = (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground border-r border-sidebar-border shadow-sm">
@@ -86,7 +122,7 @@ export function AdminShell({
 
       {/* Nav Links */}
       <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto">
-        {navItems.map((item) => {
+        {currentNavItems.map((item) => {
           const isActive = pathname === item.href;
           return (
             <Link 
@@ -109,15 +145,19 @@ export function AdminShell({
         })}
       </nav>
 
-      {/* School Identity & Sign Out */}
+      {/* User Identity & Sign Out */}
       <div className="p-4 border-t border-sidebar-border bg-sidebar/50 flex items-center justify-between gap-2">
         <div className="flex items-center gap-3 overflow-hidden">
           <div className="h-9 w-9 border border-sidebar-border rounded-full bg-primary/20 text-primary font-medium text-xs flex items-center justify-center shrink-0">
-            {getInitials(schoolName)}
+            {getInitials(displayName)}
           </div>
           <div className="flex flex-col overflow-hidden">
-            <span className="text-sm font-medium text-sidebar-foreground leading-none truncate">{schoolName}</span>
-            <span className="text-xs text-sidebar-foreground/60 mt-1 truncate">{schoolType}</span>
+            <span className="text-sm font-medium text-sidebar-foreground leading-none truncate" title={displayName}>
+              {displayName}
+            </span>
+            <span className="text-xs text-sidebar-foreground/60 mt-1 truncate">
+              {displayRole}
+            </span>
           </div>
         </div>
         <button 

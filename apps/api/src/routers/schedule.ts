@@ -73,6 +73,8 @@ export const scheduleRouter = router({
       const rows = await db
         .select({
           id: lessonSessions.id,
+          classId: scheduleSlots.classId,
+          levelCode: classes.levelCode,
           startTime: scheduleSlots.startTime,
           endTime: scheduleSlots.endTime,
           className: classes.name,
@@ -99,6 +101,8 @@ export const scheduleRouter = router({
 
       return rows.map((r) => ({
         id: r.id,
+        class_id: r.classId,
+        level_code: r.levelCode,
         time_label: `${String(r.startTime).slice(0, 5)} - ${String(r.endTime).slice(0, 5)}`,
         class_name: r.className,
         teacher_name: r.teacherName,

@@ -2,7 +2,7 @@ import { router, schoolProcedure } from "../trpc/trpc.js";
 import { logAttendanceInputSchema, submitProgressReportInputSchema } from "@institute/types";
 import { TRPCError } from "@trpc/server";
 import { db } from "@workspace/db";
-import { studentLogs, progressReports, lessonSessions, students, profiles } from "@workspace/db/schema";
+import { studentLogs, progressReports, lessonSessions, students, profiles, classEnrollments, classes, scheduleSlots, teachers } from "@workspace/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { z } from "zod";
 
@@ -10,8 +10,20 @@ export const studentsRouter = router({
   list: schoolProcedure
     .query(async ({ ctx }) => {
       const rows = await db
-        .select()
+        .select({
+          id: students.id,
+          schoolId: students.schoolId,
+          userId: students.userId,
+          fullName: students.fullName,
+          isActive: students.isActive,
+          createdAt: students.createdAt,
+          updatedAt: students.updatedAt,
+          classId: classes.id,
+          className: classes.name,
+        })
         .from(students)
+        .leftJoin(classEnrollments, and(eq(students.id, classEnrollments.studentId), eq(classEnrollments.isActive, true)))
+        .leftJoin(classes, eq(classEnrollments.classId, classes.id))
         .where(
           and(
             eq(students.schoolId, ctx.schoolId),
@@ -26,6 +38,8 @@ export const studentsRouter = router({
         user_id: r.userId,
         full_name: r.fullName,
         is_active: r.isActive,
+        class_id: r.classId,
+        class_name: r.className,
         created_at: r.createdAt.toISOString(),
         updated_at: r.updatedAt.toISOString(),
       }));
@@ -236,6 +250,210 @@ export const studentsRouter = router({
         report_date: r.reportDate,
         created_at: r.createdAt.toISOString(),
         updated_at: r.updatedAt.toISOString(),
+      }));
+    }),
+
+  getStudentSchedule: schoolProcedure
+    .query(async ({ ctx }) => {
+      if (!ctx.userId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Authentication required",
+        });
+      }
+
+      const [studentRec] = await db
+        .select()
+        .from(students)
+        .where(and(eq(students.userId, ctx.userId), eq(students.schoolId, ctx.schoolId)))
+        .limit(1);
+
+      if (!studentRec) {
+        return { class_id: null, class_name: null, slots: [], today_sessions: [] };
+      }
+
+      // Get active enrollment
+      const [enrollment] = await db
+        .select({
+          classId: classEnrollments.classId,
+          className: classes.name,
+        })
+        .from(classEnrollments)
+        .innerJoin(classes, eq(classEnrollments.classId, classes.id))
+        .where(
+          and(
+            eq(classEnrollments.studentId, studentRec.id),
+            eq(classEnrollments.schoolId, ctx.schoolId),
+            eq(classEnrollments.isActive, true)
+          )
+        )
+        .limit(1);
+
+      if (!enrollment) {
+        return { class_id: null, class_name: null, slots: [], today_sessions: [] };
+      }
+
+      // Fetch weekly schedule slots for this class
+      const slots = await db
+        .select({
+          id: scheduleSlots.id,
+          roomName: scheduleSlots.roomName,
+          dayOfWeek: scheduleSlots.dayOfWeek,
+          startTime: scheduleSlots.startTime,
+          endTime: scheduleSlots.endTime,
+          teacherName: teachers.fullName,
+        })
+        .from(scheduleSlots)
+        .innerJoin(teachers, eq(scheduleSlots.teacherId, teachers.id))
+        .where(
+          and(
+            eq(scheduleSlots.classId, enrollment.classId),
+            eq(scheduleSlots.isActive, true)
+          )
+        )
+        .orderBy(scheduleSlots.dayOfWeek, scheduleSlots.startTime);
+
+      // Fetch today's sessions for this class
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const todaySessions = await db
+        .select({
+          id: lessonSessions.id,
+          startTime: scheduleSlots.startTime,
+          endTime: scheduleSlots.endTime,
+          status: lessonSessions.status,
+          teacherName: teachers.fullName,
+        })
+        .from(lessonSessions)
+        .innerJoin(scheduleSlots, eq(lessonSessions.scheduleSlotId, scheduleSlots.id))
+        .innerJoin(teachers, eq(scheduleSlots.teacherId, teachers.id))
+        .where(
+          and(
+            eq(scheduleSlots.classId, enrollment.classId),
+            eq(lessonSessions.sessionDate, todayStr),
+            eq(lessonSessions.isActive, true)
+          )
+        );
+
+      return {
+        class_id: enrollment.classId,
+        class_name: enrollment.className,
+        slots: slots.map((s) => ({
+          id: s.id,
+          room_name: s.roomName,
+          day_of_week: s.dayOfWeek,
+          start_time: String(s.startTime).slice(0, 5),
+          end_time: String(s.endTime).slice(0, 5),
+          teacher_name: s.teacherName,
+        })),
+        today_sessions: todaySessions.map((ts) => ({
+          id: ts.id,
+          time_label: `${String(ts.startTime).slice(0, 5)} - ${String(ts.endTime).slice(0, 5)}`,
+          status: ts.status,
+          teacher_name: ts.teacherName,
+        })),
+      };
+    }),
+
+  getStudentAttendance: schoolProcedure
+    .query(async ({ ctx }) => {
+      if (!ctx.userId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Authentication required",
+        });
+      }
+
+      const [studentRec] = await db
+        .select()
+        .from(students)
+        .where(and(eq(students.userId, ctx.userId), eq(students.schoolId, ctx.schoolId)))
+        .limit(1);
+
+      if (!studentRec) {
+        return [];
+      }
+
+      // Query student logs joined with lessonSessions and scheduleSlots
+      const rows = await db
+        .select({
+          id: studentLogs.id,
+          status: studentLogs.status,
+          notes: studentLogs.notes,
+          sessionDate: lessonSessions.sessionDate,
+          className: classes.name,
+        })
+        .from(studentLogs)
+        .innerJoin(lessonSessions, eq(studentLogs.lessonSessionId, lessonSessions.id))
+        .innerJoin(scheduleSlots, eq(lessonSessions.scheduleSlotId, scheduleSlots.id))
+        .innerJoin(classes, eq(scheduleSlots.classId, classes.id))
+        .where(
+          and(
+            eq(studentLogs.studentId, studentRec.id),
+            eq(studentLogs.schoolId, ctx.schoolId),
+            eq(studentLogs.isActive, true)
+          )
+        )
+        .orderBy(desc(lessonSessions.sessionDate));
+
+      return rows.map((r) => ({
+        id: r.id,
+        status: r.status,
+        notes: r.notes,
+        session_date: r.sessionDate,
+        class_name: r.className,
+      }));
+    }),
+
+  getMyReportCards: schoolProcedure
+    .query(async ({ ctx }) => {
+      if (!ctx.userId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Authentication required",
+        });
+      }
+
+      const [studentRec] = await db
+        .select()
+        .from(students)
+        .where(and(eq(students.userId, ctx.userId), eq(students.schoolId, ctx.schoolId)))
+        .limit(1);
+
+      if (!studentRec) {
+        return [];
+      }
+
+      const rows = await db
+        .select({
+          id: progressReports.id,
+          levelCode: progressReports.levelCode,
+          scoreListening: progressReports.scoreListening,
+          scoreSpeaking: progressReports.scoreSpeaking,
+          scoreOverall: progressReports.scoreOverall,
+          notes: progressReports.notes,
+          reportDate: progressReports.reportDate,
+          teacherName: teachers.fullName,
+        })
+        .from(progressReports)
+        .innerJoin(teachers, eq(progressReports.teacherId, teachers.id))
+        .where(
+          and(
+            eq(progressReports.studentId, studentRec.id),
+            eq(progressReports.schoolId, ctx.schoolId),
+            eq(progressReports.isActive, true)
+          )
+        )
+        .orderBy(desc(progressReports.createdAt));
+
+      return rows.map((r) => ({
+        id: r.id,
+        level_code: r.levelCode,
+        score_listening: r.scoreListening,
+        score_speaking: r.scoreSpeaking,
+        score_overall: r.scoreOverall,
+        notes: r.notes,
+        report_date: r.reportDate,
+        teacher_name: r.teacherName,
       }));
     }),
 });

@@ -33,3 +33,9 @@ export const updateSlotInputSchema = z.object({
   status: z.enum(["scheduled", "in_progress", "completed", "cancelled", "substitute_needed"]).optional(),
   is_active: z.boolean().optional(),
 });
+
+export const enrollStudentInputSchema = z.object({
+  class_id: uuidSchema,
+  student_id: uuidSchema,
+});
+
