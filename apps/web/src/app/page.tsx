@@ -4,6 +4,7 @@ import React from "react";
 import { AdminShell } from "@/components/admin-shell";
 import { trpc } from "@/lib/trpc";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabaseClient";
 import { 
   BookOpen, 
   Users, 
@@ -93,8 +94,31 @@ function getAlertConfig(type: string) {
 }
 
 export default function DashboardPage() {
-  const { data, isLoading, error } = trpc.dashboard.summary.useQuery();
+  const { data, isLoading, error, refetch: refetchSummary } = trpc.dashboard.summary.useQuery();
+  const { data: openSubstitutes, refetch: refetchSubstitutes } = trpc.alerts.getOpenSubstituteRequests.useQuery();
+  const createSubMutation = trpc.alerts.createSubstituteRequest.useMutation();
   const router = useRouter();
+
+  React.useEffect(() => {
+    const channel = supabase
+      .channel("alerts")
+      .on("broadcast", { event: "alerts_update" }, () => {
+        refetchSummary();
+      })
+      .on("broadcast", { event: "substitute_request_resolved" }, () => {
+        refetchSummary();
+        refetchSubstitutes();
+      })
+      .on("broadcast", { event: "substitute_request_created" }, () => {
+        refetchSummary();
+        refetchSubstitutes();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [refetchSummary, refetchSubstitutes]);
 
   if (isLoading) {
     return (
@@ -170,26 +194,57 @@ export default function DashboardPage() {
                   <th className="px-6 py-4">Sınıf</th>
                   <th className="px-6 py-4">Öğretmen</th>
                   <th className="px-6 py-4 text-center">Öğrenci</th>
-                  <th className="px-6 py-4 text-right">Durum</th>
+                  <th className="px-6 py-4 text-center">Durum</th>
+                  <th className="px-6 py-4 text-right">İşlem</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {summary.today_schedule.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-slate-500 font-medium">
+                    <td colSpan={6} className="px-6 py-8 text-center text-slate-500 font-medium">
                       Bugün için planlanmış bir ders bulunmamaktadır.
                     </td>
                   </tr>
                 ) : (
-                  summary.today_schedule.map((lesson) => (
-                    <tr key={lesson.id} className="hover:bg-slate-50/30 transition-colors">
-                      <td className="px-6 py-4 font-semibold text-slate-600">{lesson.time_label}</td>
-                      <td className="px-6 py-4 text-slate-950 font-medium">{lesson.class_name}</td>
-                      <td className="px-6 py-4 text-slate-600 font-medium">{lesson.teacher_name}</td>
-                      <td className="px-6 py-4 text-center text-slate-600 font-medium">{lesson.student_count}</td>
-                      <td className="px-6 py-4 text-right">{getStatusBadge(lesson.status)}</td>
-                    </tr>
-                  ))
+                  summary.today_schedule.map((lesson) => {
+                    const hasCoverRequest = openSubstitutes?.some(
+                      (req) => req.lesson_session_id === lesson.id
+                    );
+                    return (
+                      <tr key={lesson.id} className="hover:bg-slate-50/30 transition-colors">
+                        <td className="px-6 py-4 font-semibold text-slate-600">{lesson.time_label}</td>
+                        <td className="px-6 py-4 text-slate-950 font-medium">{lesson.class_name}</td>
+                        <td className="px-6 py-4 text-slate-600 font-medium">{lesson.teacher_name}</td>
+                        <td className="px-6 py-4 text-center text-slate-600 font-medium">{lesson.student_count}</td>
+                        <td className="px-6 py-4 text-center">{getStatusBadge(lesson.status)}</td>
+                        <td className="px-6 py-4 text-right">
+                          {lesson.status !== "completed" && lesson.status !== "cancelled" ? (
+                            hasCoverRequest ? (
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-700 border border-amber-200">
+                                Vekil Bekleniyor
+                              </span>
+                            ) : (
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    await createSubMutation.mutateAsync({ session_id: lesson.id });
+                                    refetchSubstitutes();
+                                    refetchSummary();
+                                  } catch (err) {
+                                    console.error("Vekil çağırma hatası:", err);
+                                  }
+                                }}
+                                disabled={createSubMutation.isPending}
+                                className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+                              >
+                                {createSubMutation.isPending ? "Çağrılıyor..." : "Vekil Çağır"}
+                              </button>
+                            )
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

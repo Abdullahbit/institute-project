@@ -3,6 +3,8 @@
 import React, { useState } from "react";
 import { AdminShell } from "@/components/admin-shell";
 import { trpc } from "@/lib/trpc";
+import { supabase } from "@/lib/supabaseClient";
+import { useEffect } from "react";
 import { Clock, UserX, AlertCircle, CheckSquare, MessageSquare, Check, RotateCcw } from "lucide-react";
 
 type TabType = "all" | "unread" | "devamsizlik" | "vekil";
@@ -51,6 +53,25 @@ export default function UyarilarPage() {
   const [activeTab, setActiveTab] = useState<TabType>("all");
   const { data, isLoading, error, refetch } = trpc.alerts.list.useQuery({ limit: 50 });
   const resolveMutation = trpc.alerts.resolveAlert.useMutation();
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("alerts-feed-page")
+      .on("broadcast", { event: "alerts_update" }, () => {
+        refetch();
+      })
+      .on("broadcast", { event: "substitute_request_resolved" }, () => {
+        refetch();
+      })
+      .on("broadcast", { event: "substitute_request_created" }, () => {
+        refetch();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [refetch]);
 
   const handleResolve = async (id: string) => {
     try {

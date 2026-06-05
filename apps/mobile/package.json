@@ -16,6 +16,7 @@
     "@trpc/client": "^11.4.3",
     "@trpc/react-query": "^11.4.3",
     "expo": "~52.0.46",
+    "expo-notifications": "^56.0.15",
     "expo-router": "~4.0.20",
     "expo-status-bar": "~2.0.1",
     "react": "catalog:",

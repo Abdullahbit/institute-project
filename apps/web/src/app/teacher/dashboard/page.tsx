@@ -4,11 +4,33 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../../../context/AuthContext';
+import { trpc } from '@/lib/trpc';
+import { supabase } from '@/lib/supabaseClient';
 
 export default function TeacherDashboard() {
   const { user, role, logout } = useAuth();
   const [testWarning, setTestWarning] = useState<string | null>(null);
   const router = useRouter();
+
+  const { data: openSubstitutes, refetch: refetchSubstitutes } = trpc.alerts.getOpenSubstituteRequests.useQuery();
+  const respondMutation = trpc.alerts.respondToSubstituteRequest.useMutation();
+
+  // Subscribe to cover requests Realtime updates
+  useEffect(() => {
+    const channel = supabase
+      .channel("teacher-alerts")
+      .on("broadcast", { event: "substitute_request_created" }, () => {
+        refetchSubstitutes();
+      })
+      .on("broadcast", { event: "substitute_request_resolved" }, () => {
+        refetchSubstitutes();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [refetchSubstitutes]);
 
   // Protect route
   useEffect(() => {
@@ -68,6 +90,82 @@ export default function TeacherDashboard() {
             Your instructor portal is active. Here, you can coordinate your schedules, check in/out of class sessions, log teaching hours, and compile student progress reports.
           </p>
         </div>
+
+        {/* Substitute Requests */}
+        {openSubstitutes && openSubstitutes.length > 0 && (
+          <div className="glow-card p-6 flex flex-col gap-4 border border-violet-500/20 bg-violet-950/5 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-violet-600/10 rounded-full blur-2xl"></div>
+            <div>
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider text-[11px] text-violet-400">
+                🚨 Açık Vekil Öğretmen Talepleri
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Aşağıdaki dersler için vekil öğretmen aranmaktadır. Yardımcı olmak için kabul edebilirsiniz.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3.5 mt-2">
+              {openSubstitutes.map((req) => (
+                <div 
+                  key={req.id} 
+                  className="bg-slate-950/70 border border-slate-900 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-slate-800 transition-colors"
+                >
+                  <div className="flex flex-col gap-1 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-bold text-white">{req.class_name}</span>
+                      <span className="text-[10px] font-semibold text-slate-500 bg-slate-900 px-2 py-0.5 rounded-full border border-slate-800">
+                        {req.time_label}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      Tarih: <span className="font-semibold text-slate-300">{req.session_date}</span>
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Talebi Açan: <span className="font-medium text-slate-400">{req.requesting_teacher_name}</span>
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={async () => {
+                        try {
+                          await respondMutation.mutateAsync({
+                            request_id: req.id,
+                            response: "accepted"
+                          });
+                          refetchSubstitutes();
+                        } catch (err) {
+                          console.error("Failed to accept cover request", err);
+                        }
+                      }}
+                      disabled={respondMutation.isPending}
+                      className="px-3.5 py-2 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 transition-colors shadow-sm disabled:opacity-50"
+                    >
+                      {respondMutation.isPending ? "Kabul Ediliyor..." : "Kabul Et"}
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          await respondMutation.mutateAsync({
+                            request_id: req.id,
+                            response: "declined"
+                          });
+                          refetchSubstitutes();
+                        } catch (err) {
+                          console.error("Failed to decline cover request", err);
+                        }
+                      }}
+                      disabled={respondMutation.isPending}
+                      className="px-3.5 py-2 rounded-lg text-xs font-bold text-slate-300 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 transition-colors disabled:opacity-50"
+                    >
+                      {respondMutation.isPending ? "Reddediliyor..." : "Reddet"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Security Profile Info */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -8,15 +8,74 @@ import {
   Alert, 
   ActivityIndicator, 
   RefreshControl,
-  Switch
+  Switch,
+  Platform
 } from "react-native";
 import { trpc, setActiveUserId } from "../lib/trpc";
+import * as Notifications from "expo-notifications";
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
 
 export default function TeacherScreen() {
   const [selectedTeacherId, setSelectedTeacherId] = useState<string | null>(null);
   const [selectedTeacherProfileId, setSelectedTeacherProfileId] = useState<string | null>(null);
   const [sandboxBypass, setSandboxBypass] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Open substitute requests queries and mutations
+  const { data: openRequests, refetch: refetchOpenRequests } = trpc.alerts.getOpenSubstituteRequests.useQuery();
+  const respondMutation = trpc.alerts.respondToSubstituteRequest.useMutation();
+  const registerPushTokenMutation = trpc.alerts.registerPushToken.useMutation();
+
+  // Register push notification token on mount or when selectedTeacherId changes
+  useEffect(() => {
+    if (!selectedTeacherId) return;
+
+    async function registerForPushNotificationsAsync() {
+      if (Platform.OS === 'web') return;
+      
+      try {
+        const { status: existingStatus } = await Notifications.getPermissionsAsync() as any;
+        let finalStatus = existingStatus;
+        if (existingStatus !== 'granted') {
+          const { status } = await Notifications.requestPermissionsAsync() as any;
+          finalStatus = status;
+        }
+        if (finalStatus !== 'granted') {
+          console.warn('Failed to get push token for push notification!');
+          return;
+        }
+        
+        const token = (await Notifications.getExpoPushTokenAsync()).data;
+        console.log('Registered Expo Push Token:', token);
+
+        if (token) {
+          await registerPushTokenMutation.mutateAsync({ token });
+        }
+      } catch (error) {
+        console.log('Expo push registration skipped or failed:', error);
+      }
+    }
+
+    if (Platform.OS === 'android') {
+      Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF231F7C',
+      });
+    }
+
+    registerForPushNotificationsAsync();
+  }, [selectedTeacherId]);
 
   // Fetch all teachers to allow profile selection in Dev Sandbox
   const { data: teachersList, isLoading: loadingTeachers, refetch: refetchTeachers } = trpc.teachers.list.useQuery();
@@ -67,6 +126,7 @@ export default function TeacherScreen() {
     await refetchTeachers();
     if (selectedTeacherProfileId) {
       await refetchSessions();
+      await refetchOpenRequests();
     }
     setIsRefreshing(false);
   };
@@ -182,6 +242,89 @@ export default function TeacherScreen() {
           />
         </View>
       </View>
+
+      {/* Open Substitute Requests */}
+      {selectedTeacherProfileId && openRequests && openRequests.length > 0 && (
+        <View style={styles.subCard}>
+          <Text style={styles.subHeaderTitle}>🚨 Açık Vekil Öğretmen Talepleri</Text>
+          <Text style={{ color: "#94a3b8", fontSize: 11, marginBottom: 12 }}>
+            Yardımcı olmak için aşağıdaki derslerden birini kabul edebilirsiniz.
+          </Text>
+
+          {openRequests.map((req) => (
+            <View key={req.id} style={styles.subItem}>
+              <View style={styles.subItemHeader}>
+                <Text style={styles.subClassName}>{req.class_name}</Text>
+                <Text style={styles.subTime}>{req.time_label}</Text>
+              </View>
+              <Text style={styles.subDetails}>
+                Tarih: {req.session_date} | Talep Eden: {req.requesting_teacher_name}
+              </Text>
+              <View style={styles.subActions}>
+                <TouchableOpacity
+                  style={styles.subAcceptBtn}
+                  onPress={() => {
+                    Alert.alert(
+                      "Talebi Kabul Et",
+                      "Bu dersi vekil olarak üstlenmek istediğinizden emin misiniz?",
+                      [
+                        { text: "İptal", style: "cancel" },
+                        { 
+                          text: "Kabul Et", 
+                          onPress: async () => {
+                            try {
+                              await respondMutation.mutateAsync({
+                                request_id: req.id,
+                                response: "accepted"
+                              });
+                              refetchOpenRequests();
+                              refetchSessions();
+                            } catch (e: any) {
+                              Alert.alert("Hata", e.message || "Talebi kabul ederken bir hata oluştu.");
+                            }
+                          } 
+                        }
+                      ]
+                    );
+                  }}
+                  disabled={respondMutation.isPending}
+                >
+                  <Text style={styles.subBtnText}>Kabul Et</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.subDeclineBtn}
+                  onPress={() => {
+                    Alert.alert(
+                      "Talebi Reddet",
+                      "Bu talebi reddetmek istediğinizden emin misiniz?",
+                      [
+                        { text: "İptal", style: "cancel" },
+                        { 
+                          text: "Reddet", 
+                          onPress: async () => {
+                            try {
+                              await respondMutation.mutateAsync({
+                                request_id: req.id,
+                                response: "declined"
+                              });
+                              refetchOpenRequests();
+                            } catch (e: any) {
+                              Alert.alert("Hata", e.message || "Talebi reddederken bir hata oluştu.");
+                            }
+                          } 
+                        }
+                      ]
+                    );
+                  }}
+                  disabled={respondMutation.isPending}
+                >
+                  <Text style={styles.subBtnText}>Reddet</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
 
       {/* Screen Title */}
       <Text style={styles.heading}>Bugünkü Derslerim</Text>
@@ -376,5 +519,60 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
   },
-  completedText: { color: "#94a3b8", fontSize: 12, fontWeight: "600" }
+  completedText: { color: "#94a3b8", fontSize: 12, fontWeight: "600" },
+  subCard: {
+    backgroundColor: "#1e1b4b15",
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#8b5cf630",
+    marginBottom: 16,
+    marginTop: 8,
+  },
+  subHeaderTitle: { fontSize: 14, fontWeight: "700", color: "#a78bfa", marginBottom: 2 },
+  subItem: {
+    backgroundColor: "#0b1329",
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#1e293b",
+    marginBottom: 8,
+  },
+  subItemHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  subClassName: { fontSize: 14, fontWeight: "700", color: "#ffffff" },
+  subTime: { 
+    fontSize: 10, 
+    fontWeight: "600", 
+    color: "#cbd5e1", 
+    backgroundColor: "#020617", 
+    paddingHorizontal: 6, 
+    paddingVertical: 2, 
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#1e293b",
+  },
+  subDetails: { color: "#64748b", fontSize: 11, marginBottom: 8, fontWeight: "500" },
+  subActions: { flexDirection: "row", gap: 8 },
+  subAcceptBtn: {
+    flex: 1,
+    backgroundColor: "#10b981",
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  subDeclineBtn: {
+    flex: 1,
+    backgroundColor: "#020617",
+    borderWidth: 1,
+    borderColor: "#334155",
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  subBtnText: { color: "#ffffff", fontWeight: "700", fontSize: 11 }
 });
