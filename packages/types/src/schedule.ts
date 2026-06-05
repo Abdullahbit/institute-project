@@ -38,6 +38,8 @@ export const listScheduleInputSchema = z.object({
 
 export const todayLessonSchema = z.object({
   id: uuidSchema,
+  class_id: uuidSchema.optional(),
+  level_code: z.string().optional(),
   time_label: z.string(),
   class_name: z.string(),
   teacher_name: z.string(),
