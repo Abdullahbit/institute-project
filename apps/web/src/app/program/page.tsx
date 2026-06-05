@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { AdminShell } from "@/components/admin-shell";
 import { trpc } from "@/lib/trpc";
-import { Calendar, User, MapPin, Clock, Plus, X, Check, Filter, RotateCcw } from "lucide-react";
+import { Calendar, User, MapPin, Clock, Plus, X, Check, Filter, RotateCcw, Trash2 } from "lucide-react";
 
 const days = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
 const hours = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00"];
@@ -71,6 +71,7 @@ export default function ProgramPage() {
   // Form states for adding lessons
   const [className, setClassName] = useState("");
   const [teacherName, setTeacherName] = useState("");
+  const [lessonDate, setLessonDate] = useState(new Date().toISOString().split("T")[0]);
   const [roomName, setRoomName] = useState("Sınıf 1");
   const [dayOfWeek, setDayOfWeek] = useState(0);
   const [startTime, setStartTime] = useState("09:00");
@@ -81,7 +82,7 @@ export default function ProgramPage() {
   const [selectedClass, setSelectedClass] = useState("");
   const [selectedRoom, setSelectedRoom] = useState("");
 
-  // Load and merge initial and custom lessons
+  // Load and merge initial and custom lessons, filtering out deleted ones
   useEffect(() => {
     if (apiData) {
       const storedCustom = localStorage.getItem("customLessons");
@@ -93,9 +94,65 @@ export default function ProgramPage() {
           console.error(e);
         }
       }
-      setLessons([...apiData, ...customList]);
+
+      const storedDeleted = localStorage.getItem("deletedLessonIds");
+      let deletedIds: string[] = [];
+      if (storedDeleted) {
+        try {
+          deletedIds = JSON.parse(storedDeleted);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      const merged = [...apiData, ...customList];
+      const filtered = merged.filter((l) => !deletedIds.includes(l.id));
+      setLessons(filtered);
     }
   }, [apiData]);
+
+  const deleteSlotMutation = trpc.classes.deleteSlot.useMutation();
+
+  const handleDeleteLesson = async (lessonId: string) => {
+    if (confirm("Bu dersi silmek istediğinize emin misiniz?")) {
+      // If it's a database lesson (not a custom/offline one), sync with backend
+      if (!lessonId.startsWith("custom-")) {
+        try {
+          await deleteSlotMutation.mutateAsync({ id: lessonId });
+        } catch (e) {
+          console.error("Ders veritabanından silinirken hata oluştu:", e);
+        }
+      }
+
+      // 1. Remove from customLessons in localStorage if exists
+      const storedCustom = localStorage.getItem("customLessons");
+      if (storedCustom) {
+        try {
+          const customList = JSON.parse(storedCustom);
+          const filteredCustom = customList.filter((l: any) => l.id !== lessonId);
+          localStorage.setItem("customLessons", JSON.stringify(filteredCustom));
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      // 2. Track deleted ID to filter from mock/API lessons
+      const storedDeleted = localStorage.getItem("deletedLessonIds");
+      let deletedIds = [];
+      if (storedDeleted) {
+        try {
+          deletedIds = JSON.parse(storedDeleted);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      deletedIds.push(lessonId);
+      localStorage.setItem("deletedLessonIds", JSON.stringify(deletedIds));
+
+      // 3. Update UI state
+      setLessons((prev) => prev.filter((l) => l.id !== lessonId));
+    }
+  };
 
   // Extract unique options for filter dropdowns
   const uniqueTeachers = Array.from(new Set(lessons.map((l) => l.teacher_name))).filter(Boolean);
@@ -122,6 +179,7 @@ export default function ProgramPage() {
       day_of_week: Number(dayOfWeek),
       start_time: startTime,
       end_time: endTime,
+      lesson_date: lessonDate,
     };
 
     const updated = [...lessons, newLesson];
@@ -147,6 +205,7 @@ export default function ProgramPage() {
     setDayOfWeek(0);
     setStartTime("09:00");
     setEndTime("09:50");
+    setLessonDate(new Date().toISOString().split("T")[0]);
     setModalOpen(false);
 
     setSuccessMsg(true);
@@ -308,9 +367,21 @@ export default function ProgramPage() {
                                 return (
                                   <div
                                     key={lesson.id}
-                                    className={`${theme.bg} border-l-4 ${theme.border} border border-slate-200/60 rounded-xl p-3 shadow-sm hover:shadow transition-all duration-200 transform hover:-translate-y-0.5`}
+                                    className={`${theme.bg} border-l-4 ${theme.border} border border-slate-200/60 rounded-xl p-3 shadow-sm hover:shadow transition-all duration-200 transform hover:-translate-y-0.5 relative group/card`}
                                   >
-                                    <div className="font-bold text-slate-900 text-[13px] leading-snug">
+                                    {/* Delete Button */}
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteLesson(lesson.id);
+                                      }}
+                                      className="absolute top-2 right-2 p-1 rounded-md bg-white/90 hover:bg-rose-50 text-rose-500 hover:text-rose-600 border border-slate-200/50 shadow-sm transition-all duration-200 hover:scale-105 cursor-pointer"
+                                      title="Dersi Sil"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+
+                                    <div className="font-bold text-slate-900 text-[13px] leading-snug pr-5">
                                       {lesson.class_name}
                                     </div>
                                     <div className="text-slate-600 text-[11px] font-semibold mt-1 flex items-center gap-1">
@@ -322,10 +393,17 @@ export default function ProgramPage() {
                                         <MapPin className="h-3 w-3 text-slate-400" />
                                         {lesson.room_name}
                                       </span>
-                                      <span className="flex items-center gap-1 text-[9px]">
-                                        <span className={`w-1.5 h-1.5 rounded-full ${theme.dot}`}></span>
-                                        {lesson.start_time} - {lesson.end_time}
-                                      </span>
+                                      <div className="text-right">
+                                        <span className="flex items-center gap-1 text-[9px] justify-end">
+                                          <span className={`w-1.5 h-1.5 rounded-full ${theme.dot}`}></span>
+                                          {lesson.start_time} - {lesson.end_time}
+                                        </span>
+                                        {lesson.lesson_date && (
+                                          <span className="block text-[8px] text-slate-400 font-bold mt-0.5">
+                                            {lesson.lesson_date}
+                                          </span>
+                                        )}
+                                      </div>
                                     </div>
                                   </div>
                                 );
@@ -391,6 +469,17 @@ export default function ProgramPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Tarih</label>
+                <input 
+                  type="date" 
+                  value={lessonDate}
+                  onChange={(e) => setLessonDate(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
+                  required
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
