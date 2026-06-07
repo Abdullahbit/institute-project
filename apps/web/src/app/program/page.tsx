@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { AdminShell } from "@/components/admin-shell";
 import { trpc } from "@/lib/trpc";
-import { Calendar, User, MapPin, Clock, Plus, X, Check, Filter, RotateCcw, Loader2 } from "lucide-react";
+import { Calendar, User, MapPin, Clock, Plus, X, Check, Filter, RotateCcw, Loader2, Trash2 } from "lucide-react";
 
 const days = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
 const hours = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00"];
@@ -167,7 +167,7 @@ export default function ProgramPage() {
     }
   };
 
-  const handleDeleteLesson = async () => {
+  const handleDeleteLessonFromModal = async () => {
     if (!editingSlotId) return;
     if (!confirm("Bu dersi programdan silmek istediğinize emin misiniz?")) return;
 
@@ -178,6 +178,21 @@ export default function ProgramPage() {
       setSuccessMsg("Ders programdan silindi.");
       refetch();
       setModalOpen(false);
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (err: any) {
+      setErrorMsg(err?.message || "Silme işlemi başarısız oldu.");
+    }
+  };
+
+  const handleDeleteLesson = async (lessonId: string) => {
+    if (!confirm("Bu dersi programdan silmek istediğinize emin misiniz?")) return;
+
+    setErrorMsg(null);
+
+    try {
+      await deleteSlotMutation.mutateAsync({ id: lessonId });
+      setSuccessMsg("Ders programdan silindi.");
+      refetch();
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err: any) {
       setErrorMsg(err?.message || "Silme işlemi başarısız oldu.");
@@ -373,11 +388,6 @@ export default function ProgramPage() {
                                           <span className={`w-1.5 h-1.5 rounded-full ${theme.dot}`}></span>
                                           {lesson.start_time} - {lesson.end_time}
                                         </span>
-                                        {lesson.lesson_date && (
-                                          <span className="block text-[8px] text-slate-400 font-bold mt-0.5">
-                                            {lesson.lesson_date}
-                                          </span>
-                                        )}
                                       </div>
                                     </div>
                                   </div>
@@ -459,16 +469,7 @@ export default function ProgramPage() {
                 </select>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Tarih</label>
-                <input 
-                  type="date" 
-                  value={lessonDate}
-                  onChange={(e) => setLessonDate(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
-                  required
-                />
-              </div>
+
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
@@ -528,7 +529,7 @@ export default function ProgramPage() {
                   {editingSlotId && (
                     <button
                       type="button"
-                      onClick={handleDeleteLesson}
+                      onClick={handleDeleteLessonFromModal}
                       disabled={deleteSlotMutation.isPending}
                       className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
                     >
