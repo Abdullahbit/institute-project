@@ -9,6 +9,8 @@ export const schools = pgTable("schools", {
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
   subscriptionStatus: text("subscription_status"),
+  logoUrl: text("logo_url"),
+  themeColor: text("theme_color"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -46,6 +48,7 @@ export const students = pgTable("students", {
   schoolId: uuid("school_id").notNull().references(() => schools.id),
   userId: uuid("user_id"),
   fullName: text("full_name").notNull(),
+  parentPhone: text("parent_phone"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

@@ -22,7 +22,9 @@ import {
   FileText, 
   MapPin,
   Coffee,
-  CalendarDays
+  CalendarDays,
+  Eye,
+  Edit3
 } from "lucide-react";
 
 const daysOfWeekMap = [
@@ -80,6 +82,10 @@ export default function TeacherDashboard() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
+  const [activeHourTab, setActiveHourTab] = useState<"all" | "pending" | "approved">("all");
+  const [editingLogId, setEditingLogId] = useState<string | null>(null);
+  const [viewingAuditLog, setViewingAuditLog] = useState<any | null>(null);
+
   // Protect route
   useEffect(() => {
     if (!loading && role && role !== 'teacher') {
@@ -123,15 +129,44 @@ export default function TeacherDashboard() {
     }
   });
 
+  const updateHourLogMutation = trpc.hours.updateHourLog.useMutation({
+    onSuccess: () => {
+      setSubmitSuccess(true);
+      setNotes("");
+      setSubmitError(null);
+      refetchHours();
+      setTimeout(() => {
+        setIsModalOpen(false);
+        setSubmitSuccess(false);
+        setEditingLogId(null);
+      }, 1500);
+    },
+    onError: (err) => {
+      setSubmitError(err.message || "Saat raporu güncellenirken bir hata oluştu.");
+    }
+  });
+
   const handleSubmitHourLog = (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitError(null);
-    createHourLogMutation.mutate({
-      log_date: logDate,
-      class_type: classType,
-      duration_minutes: Number(durationMinutes),
-      notes: notes || undefined,
-    });
+    if (editingLogId) {
+      updateHourLogMutation.mutate({
+        log_id: editingLogId,
+        data: {
+          log_date: logDate,
+          class_type: classType,
+          duration_minutes: Number(durationMinutes),
+          notes: notes || undefined,
+        }
+      });
+    } else {
+      createHourLogMutation.mutate({
+        log_date: logDate,
+        class_type: classType,
+        duration_minutes: Number(durationMinutes),
+        notes: notes || undefined,
+      });
+    }
   };
 
   // Statistics calculations
@@ -373,10 +408,51 @@ export default function TeacherDashboard() {
                 Saat Raporlama
               </h3>
               <button
-                onClick={() => setIsModalOpen(true)}
+                onClick={() => {
+                  setEditingLogId(null);
+                  setLogDate(new Date().toISOString().slice(0, 10));
+                  setClassType("group");
+                  setDurationMinutes(60);
+                  setNotes("");
+                  setIsModalOpen(true);
+                }}
                 className="text-xs font-semibold text-primary hover:text-primary-hover flex items-center gap-1 transition-colors px-2 py-1 rounded bg-primary/5 hover:bg-primary/10"
               >
                 <Plus className="h-3.5 w-3.5" /> Rapor Ekle
+              </button>
+            </div>
+
+            {/* Tabbed Filters */}
+            <div className="bg-slate-100/80 p-0.5 rounded-lg inline-flex gap-1 self-start">
+              <button
+                onClick={() => setActiveHourTab("all")}
+                className={`px-3 py-1.5 text-[10px] font-bold rounded-md transition-all ${
+                  activeHourTab === "all"
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-500 hover:text-slate-900"
+                }`}
+              >
+                Tümü
+              </button>
+              <button
+                onClick={() => setActiveHourTab("pending")}
+                className={`px-3 py-1.5 text-[10px] font-bold rounded-md transition-all ${
+                  activeHourTab === "pending"
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-500 hover:text-slate-900"
+                }`}
+              >
+                Bekleyen
+              </button>
+              <button
+                onClick={() => setActiveHourTab("approved")}
+                className={`px-3 py-1.5 text-[10px] font-bold rounded-md transition-all ${
+                  activeHourTab === "approved"
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-500 hover:text-slate-900"
+                }`}
+              >
+                Onaylanan
               </button>
             </div>
 
@@ -401,31 +477,64 @@ export default function TeacherDashboard() {
                       <th className="py-2.5">Tarih</th>
                       <th className="py-2.5">Ders Tipi</th>
                       <th className="py-2.5">Süre</th>
-                      <th className="py-2.5 text-right">Durum</th>
+                      <th className="py-2.5 text-right">Durum / İşlem</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {hourLogs.map((log) => (
-                      <tr 
-                        key={log.id} 
-                        className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors"
-                      >
-                        <td className="py-3 font-medium text-slate-900">
-                          {log.log_date || "Belirtilmemiş"}
-                        </td>
-                        <td className="py-3 text-slate-500">
-                          {classTypeLabels[log.class_type as keyof typeof classTypeLabels] || log.class_type}
-                        </td>
-                        <td className="py-3 font-semibold text-slate-700">
-                          {log.hours} Saat
-                        </td>
-                        <td className="py-3 text-right">
-                          <span className={`inline-flex px-2 py-0.5 text-[10px] font-bold rounded-full border ${statusDetails[log.status as keyof typeof statusDetails]?.color || "text-slate-600 bg-slate-100 border-slate-200"}`}>
-                            {statusDetails[log.status as keyof typeof statusDetails]?.label || log.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                    {(hourLogs || [])
+                      .filter((log) => {
+                        if (activeHourTab === "pending") return log.status === "pending";
+                        if (activeHourTab === "approved") return log.status === "approved";
+                        return true;
+                      })
+                      .map((log) => (
+                        <tr 
+                          key={log.id} 
+                          className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors"
+                        >
+                          <td className="py-3 font-medium text-slate-900">
+                            {log.log_date || "Belirtilmemiş"}
+                          </td>
+                          <td className="py-3 text-slate-500">
+                            {classTypeLabels[log.class_type as keyof typeof classTypeLabels] || log.class_type}
+                          </td>
+                          <td className="py-3 font-semibold text-slate-700">
+                            {log.hours} Saat
+                          </td>
+                          <td className="py-3 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <span className={`inline-flex px-2 py-0.5 text-[10px] font-bold rounded-full border ${statusDetails[log.status as keyof typeof statusDetails]?.color || "text-slate-600 bg-slate-100 border-slate-200"}`}>
+                                {statusDetails[log.status as keyof typeof statusDetails]?.label || log.status}
+                              </span>
+
+                              <button
+                                onClick={() => setViewingAuditLog(log)}
+                                className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-650 transition-colors"
+                                title="Detayları Görüntüle"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                              </button>
+
+                              {log.status === "pending" && (
+                                <button
+                                  onClick={() => {
+                                    setEditingLogId(log.id);
+                                    setLogDate(log.log_date || "");
+                                    setClassType(log.class_type || "group");
+                                    setDurationMinutes(log.hours * 60);
+                                    setNotes(log.notes || "");
+                                    setIsModalOpen(true);
+                                  }}
+                                  className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-650 transition-colors"
+                                  title="Raporu Düzenle"
+                                >
+                                  <Edit3 className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
                   </tbody>
                 </table>
               </div>
@@ -436,12 +545,85 @@ export default function TeacherDashboard() {
 
       </div>
 
+      {/* Rapor Detayı & Geçmişi Modalı */}
+      {viewingAuditLog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden relative">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-slate-50">
+              <h3 className="font-bold text-slate-900 text-sm">Rapor Detayı & Geçmişi</h3>
+              <button 
+                onClick={() => setViewingAuditLog(null)}
+                className="p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 max-h-[350px] overflow-y-auto">
+              <div className="bg-slate-50 p-4 border border-slate-100 rounded-lg space-y-2 text-xs">
+                <div>
+                  <span className="text-slate-400 font-bold block">Tarih</span>
+                  <span className="text-slate-700 font-semibold">{viewingAuditLog.log_date}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 font-bold block">Süre & Tip</span>
+                  <span className="text-slate-700 font-semibold">
+                    {viewingAuditLog.hours} Saat — {classTypeLabels[viewingAuditLog.class_type as keyof typeof classTypeLabels] || viewingAuditLog.class_type}
+                  </span>
+                </div>
+                {viewingAuditLog.notes && (
+                  <div>
+                    <span className="text-slate-400 font-bold block">Notlar</span>
+                    <span className="text-slate-700">{viewingAuditLog.notes}</span>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">İşlem Geçmişi</h4>
+                <div className="relative border-l border-slate-200 ml-2 pl-3 space-y-3">
+                  {viewingAuditLog.audit_trail?.map((entry: any, index: number) => (
+                    <div key={index} className="relative">
+                      <span className="absolute -left-[17px] top-1 bg-white border-2 border-slate-300 w-2.5 h-2.5 rounded-full" />
+                      <div className="text-xs">
+                        <span className="font-bold text-slate-700 capitalize">
+                          {entry.action === "created" ? "Oluşturuldu" : entry.action === "updated" ? "Güncellendi" : entry.action === "approved" ? "Onaylandı" : "Reddedildi"}
+                        </span>{" "}
+                        <span className="text-[9px] text-slate-400 font-medium">
+                          {new Date(entry.at).toLocaleString("tr-TR")}
+                        </span>
+                        {entry.note && (
+                          <p className="text-slate-500 italic mt-1 bg-slate-50 p-1.5 rounded border border-slate-100 text-[10px]">
+                            Not: {entry.note}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end px-6 py-4 border-t border-slate-100 bg-slate-50">
+              <button
+                onClick={() => setViewingAuditLog(null)}
+                className="px-4 py-2 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 transition-colors shadow-sm"
+              >
+                Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Saat Raporu Giriş Modalı */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
           <div className="bg-white rounded-xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden relative">
             <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-slate-50">
-              <h3 className="font-bold text-slate-900 text-sm">Yeni Saat Raporu Bildir</h3>
+              <h3 className="font-bold text-slate-900 text-sm">
+                {editingLogId ? "Saat Raporunu Düzenle" : "Yeni Saat Raporu Bildir"}
+              </h3>
               <button 
                 onClick={() => setIsModalOpen(false)}
                 className="p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-600 transition-colors"

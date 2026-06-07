@@ -1,4 +1,4 @@
-import { router, schoolProcedure } from "../trpc/trpc.js";
+import { router, schoolProcedure, subscribedProcedure } from "../trpc/trpc.js";
 import { 
   createClassInputSchema, 
   updateClassInputSchema, 
@@ -10,7 +10,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { db } from "@workspace/db";
 import { classes, scheduleSlots, profiles, teachers, classEnrollments, students } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, ne, or } from "drizzle-orm";
 
 export const classesRouter = router({
   // Class CRUD
@@ -53,7 +53,7 @@ export const classesRouter = router({
       return cls;
     }),
 
-  create: schoolProcedure
+  create: subscribedProcedure
     .input(createClassInputSchema)
     .mutation(async ({ ctx, input }) => {
       if (!ctx.userId) {
@@ -90,7 +90,7 @@ export const classesRouter = router({
       return { success: true, classId: inserted.id };
     }),
 
-  update: schoolProcedure
+  update: subscribedProcedure
     .input(
       z.object({
         id: z.string().uuid(),
@@ -145,7 +145,7 @@ export const classesRouter = router({
       return { success: true };
     }),
 
-  delete: schoolProcedure
+  delete: subscribedProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       if (!ctx.userId) {
@@ -293,7 +293,7 @@ export const classesRouter = router({
       };
     }),
 
-  createSlot: schoolProcedure
+  createSlot: subscribedProcedure
     .input(createSlotInputSchema)
     .mutation(async ({ ctx, input }) => {
       if (!ctx.userId) {
@@ -317,6 +317,45 @@ export const classesRouter = router({
         });
       }
 
+      // Check for double booking conflicts on teacher or room
+      const overlaps = await db
+        .select()
+        .from(scheduleSlots)
+        .where(
+          and(
+            eq(scheduleSlots.schoolId, ctx.schoolId),
+            eq(scheduleSlots.dayOfWeek, input.day_of_week),
+            eq(scheduleSlots.isActive, true),
+            or(
+              eq(scheduleSlots.teacherId, input.teacher_id),
+              eq(scheduleSlots.roomName, input.room_name)
+            )
+          )
+        );
+
+      const inputStart = input.start_time.slice(0, 5);
+      const inputEnd = input.end_time.slice(0, 5);
+
+      for (const slot of overlaps) {
+        const slotStart = String(slot.startTime).slice(0, 5);
+        const slotEnd = String(slot.endTime).slice(0, 5);
+
+        if (inputStart < slotEnd && inputEnd > slotStart) {
+          if (slot.teacherId === input.teacher_id) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Öğretmen çakışması: Seçilen öğretmen bu gün ve saatte başka bir derse atanmış.",
+            });
+          }
+          if (slot.roomName === input.room_name) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Sınıf/Oda çakışması: Seçilen sınıf/oda bu gün ve saatte başka bir derse atanmış.",
+            });
+          }
+        }
+      }
+
       const [inserted] = await db
         .insert(scheduleSlots)
         .values({
@@ -335,7 +374,7 @@ export const classesRouter = router({
       return { success: true, slotId: inserted.id };
     }),
 
-  updateSlot: schoolProcedure
+  updateSlot: subscribedProcedure
     .input(
       z.object({
         id: z.string().uuid(),
@@ -362,6 +401,72 @@ export const classesRouter = router({
           code: "FORBIDDEN",
           message: "Only administrators can update schedule slots",
         });
+      }
+
+      const [currentSlot] = await db
+        .select()
+        .from(scheduleSlots)
+        .where(
+          and(
+            eq(scheduleSlots.id, input.id),
+            eq(scheduleSlots.schoolId, ctx.schoolId)
+          )
+        )
+        .limit(1);
+
+      if (!currentSlot) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Schedule slot not found",
+        });
+      }
+
+      const teacherId = input.data.teacher_id !== undefined ? input.data.teacher_id : currentSlot.teacherId;
+      const roomName = input.data.room_name !== undefined ? input.data.room_name : currentSlot.roomName;
+      const dayOfWeek = input.data.day_of_week !== undefined ? input.data.day_of_week : currentSlot.dayOfWeek;
+      const startTime = input.data.start_time !== undefined ? input.data.start_time : String(currentSlot.startTime).slice(0, 5);
+      const endTime = input.data.end_time !== undefined ? input.data.end_time : String(currentSlot.endTime).slice(0, 5);
+      const isActive = input.data.is_active !== undefined ? input.data.is_active : currentSlot.isActive;
+
+      if (isActive) {
+        const overlaps = await db
+          .select()
+          .from(scheduleSlots)
+          .where(
+            and(
+              eq(scheduleSlots.schoolId, ctx.schoolId),
+              eq(scheduleSlots.dayOfWeek, dayOfWeek),
+              eq(scheduleSlots.isActive, true),
+              ne(scheduleSlots.id, input.id),
+              or(
+                eq(scheduleSlots.teacherId, teacherId),
+                eq(scheduleSlots.roomName, roomName)
+              )
+            )
+          );
+
+        const inputStart = startTime.slice(0, 5);
+        const inputEnd = endTime.slice(0, 5);
+
+        for (const slot of overlaps) {
+          const slotStart = String(slot.startTime).slice(0, 5);
+          const slotEnd = String(slot.endTime).slice(0, 5);
+
+          if (inputStart < slotEnd && inputEnd > slotStart) {
+            if (slot.teacherId === teacherId) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: "Öğretmen çakışması: Seçilen öğretmen bu gün ve saatte başka bir derse atanmış.",
+              });
+            }
+            if (slot.roomName === roomName) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: "Sınıf/Oda çakışması: Seçilen sınıf/oda bu gün ve saatte başka bir derse atanmış.",
+              });
+            }
+          }
+        }
       }
 
       const updateData: Record<string, any> = { updatedAt: new Date() };
@@ -395,7 +500,7 @@ export const classesRouter = router({
       return { success: true };
     }),
 
-  deleteSlot: schoolProcedure
+  deleteSlot: subscribedProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       if (!ctx.userId) {
@@ -444,7 +549,7 @@ export const classesRouter = router({
     }),
 
   // Student Enrollment management
-  enrollStudent: schoolProcedure
+  enrollStudent: subscribedProcedure
     .input(enrollStudentInputSchema)
     .mutation(async ({ ctx, input }) => {
       if (!ctx.userId) {
@@ -531,7 +636,7 @@ export const classesRouter = router({
       return { success: true };
     }),
 
-  unenrollStudent: schoolProcedure
+  unenrollStudent: subscribedProcedure
     .input(enrollStudentInputSchema)
     .mutation(async ({ ctx, input }) => {
       if (!ctx.userId) {

@@ -1,4 +1,4 @@
-import { router, schoolProcedure } from "../trpc/trpc.js";
+import { router, schoolProcedure, subscribedProcedure } from "../trpc/trpc.js";
 import { logAttendanceInputSchema, submitProgressReportInputSchema } from "@institute/types";
 import { TRPCError } from "@trpc/server";
 import { db } from "@workspace/db";
@@ -15,6 +15,7 @@ export const studentsRouter = router({
           schoolId: students.schoolId,
           userId: students.userId,
           fullName: students.fullName,
+          parentPhone: students.parentPhone,
           isActive: students.isActive,
           createdAt: students.createdAt,
           updatedAt: students.updatedAt,
@@ -37,6 +38,7 @@ export const studentsRouter = router({
         school_id: r.schoolId,
         user_id: r.userId,
         full_name: r.fullName,
+        parent_phone: r.parentPhone,
         is_active: r.isActive,
         class_id: r.classId,
         class_name: r.className,
@@ -45,12 +47,13 @@ export const studentsRouter = router({
       }));
     }),
 
-  create: schoolProcedure
+  create: subscribedProcedure
     .input(
       z.object({
         full_name: z.string().min(1),
         email: z.string().email().optional(),
         password: z.string().min(6).optional(),
+        parent_phone: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -126,6 +129,7 @@ export const studentsRouter = router({
         .values({
           schoolId: ctx.schoolId,
           fullName: input.full_name,
+          parentPhone: input.parent_phone || null,
           userId,
           isActive: true,
         })
@@ -138,7 +142,7 @@ export const studentsRouter = router({
       };
     }),
 
-  logAttendance: schoolProcedure
+  logAttendance: subscribedProcedure
     .input(logAttendanceInputSchema)
     .mutation(async ({ ctx, input }) => {
       if (!ctx.userId) {
@@ -195,7 +199,7 @@ export const studentsRouter = router({
       return { success: true, presentCount };
     }),
 
-  submitProgressReport: schoolProcedure
+  submitProgressReport: subscribedProcedure
     .input(submitProgressReportInputSchema)
     .mutation(async ({ ctx, input }) => {
       if (!ctx.userId) {

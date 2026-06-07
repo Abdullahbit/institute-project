@@ -16,6 +16,7 @@ export default function OgrencilerPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [parentPhone, setParentPhone] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
 
@@ -49,6 +50,7 @@ export default function OgrencilerPage() {
         full_name: fullName,
         email: email || undefined,
         password: password || undefined,
+        parent_phone: parentPhone || undefined,
       });
 
       await refetch();
@@ -57,6 +59,7 @@ export default function OgrencilerPage() {
       setFullName("");
       setEmail("");
       setPassword("");
+      setParentPhone("");
       setModalOpen(false);
 
       setSuccessMsg(true);
@@ -157,7 +160,7 @@ export default function OgrencilerPage() {
               <thead className="bg-slate-50/50 border-b border-slate-100 text-slate-600 font-medium">
                 <tr>
                   <th className="px-6 py-4">Ad Soyad</th>
-                  <th className="px-6 py-4">Rol</th>
+                  <th className="px-6 py-4">Veli Telefonu</th>
                   <th className="px-6 py-4">Kayıtlı Sınıf</th>
                   <th className="px-6 py-4">Durum</th>
                   <th className="px-6 py-4 text-right">İşlemler</th>
@@ -174,7 +177,7 @@ export default function OgrencilerPage() {
                   students.map((s) => (
                     <tr key={s.id} className="hover:bg-slate-50/30 transition-colors">
                       <td className="px-6 py-4 font-bold text-slate-900">{s.full_name}</td>
-                      <td className="px-6 py-4 text-slate-600 font-medium">Öğrenci</td>
+                      <td className="px-6 py-4 text-slate-600 font-medium">{s.parent_phone || "-"}</td>
                       <td className="px-6 py-4">
                         {s.class_name ? (
                           <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-primary/10 text-primary border border-primary/20">
@@ -348,6 +351,17 @@ export default function OgrencilerPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Veli Telefonu</label>
+                <input 
+                  type="text" 
+                  value={parentPhone}
+                  onChange={(e) => setParentPhone(e.target.value)}
+                  placeholder="+90 555 444 33 22"
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
                 />
               </div>

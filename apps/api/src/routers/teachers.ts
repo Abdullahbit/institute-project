@@ -1,6 +1,6 @@
 import { listTeachersInputSchema, teacherSchema, createTeacherInputSchema, updateTeacherInputSchema } from "@institute/types";
 import { z } from "zod";
-import { router, schoolProcedure } from "../trpc/trpc.js";
+import { router, schoolProcedure, subscribedProcedure } from "../trpc/trpc.js";
 import { TRPCError } from "@trpc/server";
 import { db } from "@workspace/db";
 import { teachers, profiles } from "@workspace/db/schema";
@@ -78,7 +78,7 @@ export const teachersRouter = router({
       };
     }),
 
-  create: schoolProcedure
+  create: subscribedProcedure
     .input(createTeacherInputSchema)
     .mutation(async ({ ctx, input }) => {
       if (!ctx.userId) {
@@ -170,7 +170,7 @@ export const teachersRouter = router({
       };
     }),
 
-  update: schoolProcedure
+  update: subscribedProcedure
     .input(
       z.object({
         id: z.string().uuid(),
@@ -240,7 +240,7 @@ export const teachersRouter = router({
       return { success: true };
     }),
 
-  delete: schoolProcedure
+  delete: subscribedProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       if (!ctx.userId) {
