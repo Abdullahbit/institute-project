@@ -344,7 +344,19 @@ export default function ProgramPage() {
                                     className={`${theme.bg} border-l-4 ${theme.border} border border-slate-200/60 rounded-xl p-3 shadow-sm hover:shadow transition-all duration-200 transform hover:-translate-y-0.5 cursor-pointer`}
                                     title="Dersi Düzenle / Sil"
                                   >
-                                    <div className="font-bold text-slate-900 text-[13px] leading-snug">
+                                    {/* Delete Button */}
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteLesson(lesson.id);
+                                      }}
+                                      className="absolute top-2 right-2 p-1 rounded-md bg-white/90 hover:bg-rose-50 text-rose-500 hover:text-rose-600 border border-slate-200/50 shadow-sm transition-all duration-200 hover:scale-105 cursor-pointer"
+                                      title="Dersi Sil"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+
+                                    <div className="font-bold text-slate-900 text-[13px] leading-snug pr-5">
                                       {lesson.class_name}
                                     </div>
                                     <div className="text-slate-600 text-[11px] font-semibold mt-1 flex items-center gap-1">
@@ -356,10 +368,17 @@ export default function ProgramPage() {
                                         <MapPin className="h-3 w-3 text-slate-400" />
                                         {lesson.room_name}
                                       </span>
-                                      <span className="flex items-center gap-1 text-[9px]">
-                                        <span className={`w-1.5 h-1.5 rounded-full ${theme.dot}`}></span>
-                                        {lesson.start_time} - {lesson.end_time}
-                                      </span>
+                                      <div className="text-right">
+                                        <span className="flex items-center gap-1 text-[9px] justify-end">
+                                          <span className={`w-1.5 h-1.5 rounded-full ${theme.dot}`}></span>
+                                          {lesson.start_time} - {lesson.end_time}
+                                        </span>
+                                        {lesson.lesson_date && (
+                                          <span className="block text-[8px] text-slate-400 font-bold mt-0.5">
+                                            {lesson.lesson_date}
+                                          </span>
+                                        )}
+                                      </div>
                                     </div>
                                   </div>
                                 );
@@ -438,6 +457,17 @@ export default function ProgramPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Tarih</label>
+                <input 
+                  type="date" 
+                  value={lessonDate}
+                  onChange={(e) => setLessonDate(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
+                  required
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
