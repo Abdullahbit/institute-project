@@ -6,6 +6,7 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { useLanguage } from "@/context/LanguageContext";
 import { 
   Building,
   Mail,
@@ -31,83 +32,84 @@ import {
   CheckCircle2
 } from "lucide-react";
 
-function getStatusBadge(status: string) {
+function getStatusBadge(status: string, t: any) {
   switch (status) {
     case "in_progress":
       return (
         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-700 border border-emerald-200">
-          Devam Ediyor
+          {t("status_in_progress")}
         </span>
       );
     case "completed":
       return (
         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-          Tamamlandı
+          {t("status_completed")}
         </span>
       );
     case "cancelled":
       return (
         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-500/15 text-red-700 border border-red-200">
-          İptal
+          {t("status_cancelled")}
         </span>
       );
     case "substitute_needed":
       return (
         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-700 border border-amber-200">
-          Vekil Bekleniyor
+          {t("status_substitute_needed")}
         </span>
       );
     default:
       return (
         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-50 text-slate-500 border border-slate-200">
-          Bekliyor
+          {t("status_pending")}
         </span>
       );
   }
 }
 
-function getAlertConfig(type: string) {
+function getAlertConfig(type: string, t: any) {
   switch (type) {
     case "late_check_in":
       return {
         icon: Clock,
         color: "text-orange-500",
         bg: "bg-orange-50/10",
-        label: "Geç Giriş"
+        label: t("alert_late_check_in")
       };
     case "substitute_request":
       return {
         icon: AlertCircle,
         color: "text-blue-500",
         bg: "bg-blue-50/10",
-        label: "Vekil Talebi"
+        label: t("alert_substitute_request")
       };
     case "no_show":
       return {
         icon: UserX,
         color: "text-red-500",
         bg: "bg-red-50/10",
-        label: "Devamsızlık"
+        label: t("alert_no_show")
       };
     case "hour_approval":
       return {
         icon: CheckSquare,
         color: "text-emerald-500",
         bg: "bg-emerald-50/10",
-        label: "Saat Onayı"
+        label: t("alert_hour_approval")
       };
     default:
       return {
         icon: MessageSquare,
         color: "text-slate-500",
         bg: "bg-slate-50/10",
-        label: "Bildirim"
+        label: t("alert_notification")
       };
   }
 }
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const router = useRouter();
   const isFounder = user?.email === "simaalouzi@gmail.com";
 
@@ -459,16 +461,16 @@ export default function DashboardPage() {
   // --- SCHOOL ADMIN VIEW ---
   return (
     <AdminShell
-      title="Ana Sayfa"
-      subtitle={`${displaySchoolName} günlük özet tablosu.`}
+      title={t("nav_home")}
+      subtitle={`${displaySchoolName} ${t("dashboard_subtitle")}`}
     >
       {/* Metrics Row */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
         {[
-          { label: "Bugünkü Dersler", value: summary!.lessons_today, icon: BookOpen, bg: "bg-blue-50", text: "text-blue-600" },
-          { label: "Aktif Öğretmenler", value: summary!.active_teachers, icon: Users, bg: "bg-emerald-50", text: "text-emerald-600" },
-          { label: "Toplam Öğrenci", value: summary!.total_students, icon: GraduationCap, bg: "bg-purple-50", text: "text-purple-600" },
-          { label: "Bekleyen Onaylar", value: summary!.pending_approvals, icon: CheckCircle2, bg: "bg-amber-50", text: "text-amber-600" },
+          { label: t("metric_today_lessons"), value: summary!.lessons_today, icon: BookOpen, bg: "bg-blue-50", text: "text-blue-600" },
+          { label: t("metric_active_teachers"), value: summary!.active_teachers, icon: Users, bg: "bg-emerald-50", text: "text-emerald-600" },
+          { label: t("metric_total_students"), value: summary!.total_students, icon: GraduationCap, bg: "bg-purple-50", text: "text-purple-600" },
+          { label: t("metric_pending_approvals"), value: summary!.pending_approvals, icon: CheckCircle2, bg: "bg-amber-50", text: "text-amber-600" },
         ].map((card) => (
           <div
             key={card.label}
@@ -490,31 +492,31 @@ export default function DashboardPage() {
         {/* Today's Schedule Table */}
         <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden flex flex-col">
           <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
-            <h2 className="font-semibold text-lg text-slate-900">Bugünkü Program</h2>
+            <h2 className="font-semibold text-lg text-slate-900">{t("title_today_schedule")}</h2>
             <button 
               onClick={() => router.push("/program")}
               className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
             >
-              Tümünü Gör <ChevronRight className="h-3 w-3" />
+              {t("action_view_all")} <ChevronRight className="h-3 w-3" />
             </button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
               <thead className="bg-slate-50/50 border-b border-slate-100 text-slate-600 font-medium">
                 <tr>
-                  <th className="px-6 py-4">Saat</th>
-                  <th className="px-6 py-4">Sınıf</th>
-                  <th className="px-6 py-4">Öğretmen</th>
-                  <th className="px-6 py-4 text-center">Öğrenci</th>
-                  <th className="px-6 py-4 text-center">Durum</th>
-                  <th className="px-6 py-4 text-right">İşlem</th>
+                  <th className="px-6 py-4">{t("th_time")}</th>
+                  <th className="px-6 py-4">{t("th_class")}</th>
+                  <th className="px-6 py-4">{t("th_teacher")}</th>
+                  <th className="px-6 py-4 text-center">{t("th_student")}</th>
+                  <th className="px-6 py-4 text-center">{t("th_status")}</th>
+                  <th className="px-6 py-4 text-right">{t("th_action")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {summary!.today_schedule.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-6 py-8 text-center text-slate-500 font-medium">
-                      Bugün için planlanmış bir ders bulunmamaktadır.
+                      {t("msg_no_lessons")}
                     </td>
                   </tr>
                 ) : (
@@ -528,12 +530,12 @@ export default function DashboardPage() {
                         <td className="px-6 py-4 text-slate-950 font-medium">{lesson.class_name}</td>
                         <td className="px-6 py-4 text-slate-600 font-medium">{lesson.teacher_name}</td>
                         <td className="px-6 py-4 text-center text-slate-600 font-medium">{lesson.student_count}</td>
-                        <td className="px-6 py-4 text-center">{getStatusBadge(lesson.status)}</td>
+                        <td className="px-6 py-4 text-center">{getStatusBadge(lesson.status, t)}</td>
                         <td className="px-6 py-4 text-right">
                           {lesson.status !== "completed" && lesson.status !== "cancelled" ? (
                             hasCoverRequest ? (
                               <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-700 border border-amber-200">
-                                Vekil Bekleniyor
+                                {t("status_substitute_needed")}
                               </span>
                             ) : (
                               <button
@@ -549,7 +551,7 @@ export default function DashboardPage() {
                                 disabled={createSubMutation.isPending}
                                 className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
                               >
-                                {createSubMutation.isPending ? "Çağrılıyor..." : "Vekil Çağır"}
+                                {createSubMutation.isPending ? t("action_calling") : t("action_call_substitute")}
                               </button>
                             )
                           ) : null}
@@ -565,13 +567,13 @@ export default function DashboardPage() {
 
         {/* Recent Alerts Card */}
         <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm p-6 flex flex-col">
-          <h2 className="font-semibold text-lg text-slate-900 mb-4 pb-1">Son Uyarılar</h2>
+          <h2 className="font-semibold text-lg text-slate-900 mb-4 pb-1">{t("title_recent_alerts")}</h2>
           <div className="flex-1 space-y-4">
             {summary!.recent_alerts.length === 0 ? (
-              <p className="text-xs text-slate-500 text-center py-8 font-medium">Aktif uyarı bulunmuyor.</p>
+              <p className="text-xs text-slate-500 text-center py-8 font-medium">{t("msg_no_alerts")}</p>
             ) : (
               summary!.recent_alerts.map((alert) => {
-                const config = getAlertConfig(alert.type);
+                const config = getAlertConfig(alert.type, t);
                 return (
                   <div 
                     key={alert.id} 
@@ -600,7 +602,7 @@ export default function DashboardPage() {
             onClick={() => router.push("/uyarilar")}
             className="w-full mt-4 py-2.5 border border-slate-200/80 rounded-lg text-xs font-semibold text-primary hover:bg-blue-50 transition-colors"
           >
-            Tüm Uyarıları Görüntüle
+            {t("action_view_all_alerts")}
           </button>
         </div>
       </div>

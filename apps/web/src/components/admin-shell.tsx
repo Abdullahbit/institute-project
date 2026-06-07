@@ -13,33 +13,67 @@ import {
   X,
   Clock,
   Settings,
-  LogOut
+  LogOut,
+  BookOpen
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
+import { trpc } from "@/lib/trpc";
+
+function hexToHsl(hex: string): string {
+  hex = hex.replace(/^#/, "");
+  if (hex.length === 3) {
+    hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+  }
+  if (hex.length !== 6) {
+    return "217 91% 60%";
+  }
+  let r = parseInt(hex.substring(0, 2), 16) / 255;
+  let g = parseInt(hex.substring(2, 4), 16) / 255;
+  let b = parseInt(hex.substring(4, 6), 16) / 255;
+  let max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0, l = (max + min) / 2;
+  if (max !== min) {
+    let d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+      case g: h = (b - r) / d + 2; break;
+      case b: h = (r - g) / d + 4; break;
+    }
+    h /= 6;
+  }
+  h = Math.round(h * 360);
+  s = Math.round(s * 100);
+  l = Math.round(l * 100);
+  return `${h} ${s}% ${l}%`;
+}
+
+import { useLanguage } from "@/context/LanguageContext";
 
 const adminNavItems = [
-  { href: "/", label: "Ana Sayfa", icon: Home },
-  { href: "/program", label: "Program", icon: Calendar },
-  { href: "/ogretmenler", label: "Öğretmenler", icon: Users },
-  { href: "/ogrenciler", label: "Öğrenciler", icon: GraduationCap },
-  { href: "/saat-takibi", label: "Saat Takibi", icon: Clock },
-  { href: "/uyarilar", label: "Uyarılar", icon: Bell },
-  { href: "/ayarlar", label: "Ayarlar", icon: Settings },
+  { href: "/", label: "Ana Sayfa", translationKey: "nav_home" as const, icon: Home },
+  { href: "/program", label: "Program", translationKey: "nav_program" as const, icon: Calendar },
+  { href: "/siniflar", label: "Sınıflar", translationKey: "nav_classes" as const, icon: BookOpen },
+  { href: "/ogretmenler", label: "Öğretmenler", translationKey: "nav_teachers" as const, icon: Users },
+  { href: "/ogrenciler", label: "Öğrenciler", translationKey: "nav_students" as const, icon: GraduationCap },
+  { href: "/saat-takibi", label: "Saat Takibi", translationKey: "nav_hours" as const, icon: Clock },
+  { href: "/uyarilar", label: "Uyarılar", translationKey: "nav_alerts" as const, icon: Bell },
+  { href: "/ayarlar", label: "Ayarlar", translationKey: "nav_settings" as const, icon: Settings },
 ];
 
 const founderNavItems = [
-  { href: "/", label: "Ana Sayfa", icon: Home },
-  { href: "/ayarlar", label: "Ayarlar", icon: Settings },
+  { href: "/", label: "Ana Sayfa", translationKey: "nav_home" as const, icon: Home },
+  { href: "/ayarlar", label: "Ayarlar", translationKey: "nav_settings" as const, icon: Settings },
 ];
 
 const teacherNavItems = [
-  { href: "/teacher/dashboard", label: "Ana Sayfa", icon: Home },
-  { href: "/teacher/today", label: "Bugünkü Derslerim", icon: Calendar },
+  { href: "/teacher/dashboard", label: "Ana Sayfa", translationKey: "nav_home" as const, icon: Home },
+  { href: "/teacher/today", label: "Bugünkü Derslerim", translationKey: "nav_program" as const, icon: Calendar },
 ];
 
 const studentNavItems = [
-  { href: "/student/dashboard", label: "Ana Sayfa", icon: Home },
+  { href: "/student/dashboard", label: "Ana Sayfa", translationKey: "nav_home" as const, icon: Home },
 ];
 
 export function AdminShell({
@@ -55,7 +89,14 @@ export function AdminShell({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [schoolName, setSchoolName] = useState("Bright Minds");
   const [schoolType, setSchoolType] = useState("Dil Okulu");
+  const [logoUrl, setLogoUrl] = useState("");
+  const [themeColor, setThemeColor] = useState("#3b82f6");
   const { logout, role, user } = useAuth();
+  const { language, setLanguage, t } = useLanguage();
+
+  const { data: branding, refetch } = trpc.admin.getSchoolBranding.useQuery(undefined, {
+    enabled: !!user,
+  });
 
   const isFounder = user?.email === "simaalouzi@gmail.com";
 
@@ -77,16 +118,36 @@ export function AdminShell({
         
         const storedType = localStorage.getItem("schoolType") || "Dil Okulu";
         setSchoolType(storedType);
+
+        const storedLogo = localStorage.getItem("logoUrl") || "";
+        setLogoUrl(storedLogo);
+
+        const storedColor = localStorage.getItem("themeColor") || "#3b82f6";
+        setThemeColor(storedColor);
       }
     };
 
     loadIdentity();
 
-    window.addEventListener("settings-updated", loadIdentity);
-    return () => {
-      window.removeEventListener("settings-updated", loadIdentity);
+    const handleUpdate = () => {
+      loadIdentity();
+      refetch();
     };
-  }, []);
+
+    window.addEventListener("settings-updated", handleUpdate);
+    return () => {
+      window.removeEventListener("settings-updated", handleUpdate);
+    };
+  }, [refetch]);
+
+  React.useEffect(() => {
+    if (branding) {
+      const namePart = (branding.name || "Bright Minds").replace(" Dil Okulu", "").replace(" Okulu", "");
+      setSchoolName(namePart);
+      setLogoUrl(branding.logoUrl || "");
+      setThemeColor(branding.themeColor || "#3b82f6");
+    }
+  }, [branding]);
 
   const getInitials = (name: string) => {
     if (!name) return "U";
@@ -101,22 +162,26 @@ export function AdminShell({
 
   const displayName = user?.user_metadata?.full_name || user?.email || "Kullanıcı";
   const displayRole = role === "admin" 
-    ? "Yönetici" 
+    ? t("role_admin") 
     : role === "teacher" 
-      ? "Eğitmen" 
+      ? t("role_teacher") 
       : role === "student" 
-        ? "Öğrenci" 
-        : "Kullanıcı";
+        ? t("role_student") 
+        : t("nav_logout").replace(" Yap", "");
 
   const sidebarContent = (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground border-r border-sidebar-border shadow-sm">
       {/* Brand */}
       <div className="px-6 py-6 border-b border-sidebar-border">
         <Link href="/" className="flex items-center gap-3">
-          <div className="h-8 w-8 bg-primary rounded-md flex items-center justify-center shadow-sm">
-            <GraduationCap className="h-5 w-5 text-primary-foreground" />
-          </div>
-          <span className="text-xl font-bold tracking-tight text-white">EduPanel</span>
+          {logoUrl ? (
+            <img src={logoUrl} className="h-8 w-8 object-contain rounded-md bg-white p-0.5" alt={schoolName} />
+          ) : (
+            <div className="h-8 w-8 bg-primary rounded-md flex items-center justify-center shadow-sm">
+              <GraduationCap className="h-5 w-5 text-primary-foreground" />
+            </div>
+          )}
+          <span className="text-xl font-bold tracking-tight text-white">{schoolName}</span>
         </Link>
       </div>
 
@@ -139,7 +204,7 @@ export function AdminShell({
                 "h-5 w-5",
                 isActive ? "text-primary" : "text-sidebar-foreground/50 group-hover:text-sidebar-foreground/80"
               )} />
-              {item.label}
+              {t(item.translationKey)}
             </Link>
           );
         })}
@@ -162,11 +227,12 @@ export function AdminShell({
         </div>
         <button 
           onClick={async () => {
-            if (confirm("Çıkış yapmak istediğinize emin misiniz?")) {
+            const confirmMsg = language === "tr" ? "Çıkış yapmak istediğinize emin misiniz?" : "Are you sure you want to log out?";
+            if (confirm(confirmMsg)) {
               await logout();
             }
           }}
-          title="Çıkış Yap"
+          title={t("nav_logout")}
           className="p-2 rounded-lg text-sidebar-foreground/50 hover:bg-rose-500/10 hover:text-rose-500 transition-colors shrink-0"
         >
           <LogOut className="h-5 w-5" />
@@ -176,7 +242,14 @@ export function AdminShell({
   );
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
+    <div 
+      className="flex min-h-screen bg-background text-foreground"
+      style={
+        themeColor 
+          ? { "--primary": hexToHsl(themeColor) } as React.CSSProperties 
+          : undefined
+      }
+    >
       {/* Desktop Sidebar */}
       <div className="hidden md:flex w-64 flex-col fixed inset-y-0 z-50">
         {sidebarContent}
@@ -187,10 +260,14 @@ export function AdminShell({
         {/* Mobile Header */}
         <header className="md:hidden flex items-center justify-between px-4 py-3 border-b bg-sidebar text-sidebar-foreground">
           <div className="flex items-center gap-2">
-            <div className="h-6 w-6 bg-primary rounded flex items-center justify-center">
-              <GraduationCap className="h-4 w-4 text-white" />
-            </div>
-            <span className="font-semibold text-lg text-white">EduPanel</span>
+            {logoUrl ? (
+              <img src={logoUrl} className="h-6 w-6 object-contain rounded bg-white p-0.5" alt={schoolName} />
+            ) : (
+              <div className="h-6 w-6 bg-primary rounded flex items-center justify-center">
+                <GraduationCap className="h-4 w-4 text-white" />
+              </div>
+            )}
+            <span className="font-semibold text-lg text-white">{schoolName}</span>
           </div>
           <button 
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -217,11 +294,39 @@ export function AdminShell({
 
         <main className="flex-1 p-4 md:p-8 overflow-auto">
           {/* Header */}
-          <header className="mb-6">
-            <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">{title}</h1>
-            {subtitle ? (
-              <p className="text-sm text-slate-500 mt-1">{subtitle}</p>
-            ) : null}
+          <header className="mb-6 flex items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">{title}</h1>
+              {subtitle ? (
+                <p className="text-sm text-slate-500 mt-1">{subtitle}</p>
+              ) : null}
+            </div>
+            
+            {/* Language Switcher Toggler */}
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-lg border border-slate-200 shadow-sm shrink-0">
+              <button
+                onClick={() => setLanguage("tr")}
+                className={cn(
+                  "px-2.5 py-1 text-xs font-bold rounded-md transition-all duration-200",
+                  language === "tr" 
+                    ? "bg-white text-slate-900 shadow-sm" 
+                    : "text-slate-500 hover:text-slate-800"
+                )}
+              >
+                TR
+              </button>
+              <button
+                onClick={() => setLanguage("en")}
+                className={cn(
+                  "px-2.5 py-1 text-xs font-bold rounded-md transition-all duration-200",
+                  language === "en" 
+                    ? "bg-white text-slate-900 shadow-sm" 
+                    : "text-slate-500 hover:text-slate-800"
+                )}
+              >
+                EN
+              </button>
+            </div>
           </header>
           {children}
         </main>
