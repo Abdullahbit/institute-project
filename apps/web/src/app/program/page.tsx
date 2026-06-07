@@ -61,8 +61,24 @@ function getLessonTheme(className: string) {
   }
 }
 
+function getWeekDates() {
+  const current = new Date();
+  const day = current.getDay();
+  const diff = current.getDate() - day + (day === 0 ? -6 : 1);
+  const monday = new Date(current.setDate(diff));
+  
+  return Array.from({ length: 6 }, (_, idx) => {
+    const nextDay = new Date(monday);
+    nextDay.setDate(monday.getDate() + idx);
+    const dd = String(nextDay.getDate()).padStart(2, "0");
+    const mm = String(nextDay.getMonth() + 1).padStart(2, "0");
+    return `${dd}.${mm}`;
+  });
+}
+
 export default function ProgramPage() {
   const { data: apiData, isLoading, error, refetch } = trpc.classes.listSlots.useQuery();
+  const weekDates = React.useMemo(() => getWeekDates(), []);
   const { data: teachersList } = trpc.teachers.list.useQuery();
   const { data: classesList } = trpc.classes.list.useQuery();
   
@@ -310,12 +326,15 @@ export default function ProgramPage() {
                   <th className="py-3 px-4 text-center text-xs font-bold text-slate-500 uppercase tracking-wider w-24 border-r border-slate-200">
                     SAAT
                   </th>
-                  {days.map((day) => (
+                  {days.map((day, idx) => (
                     <th 
                       key={day} 
                       className="py-3 px-4 text-center text-xs font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200 last:border-r-0"
                     >
-                      {day}
+                      <div className="flex flex-col items-center">
+                        <span>{day}</span>
+                        <span className="text-[9px] font-medium text-slate-400 mt-0.5">({weekDates[idx]})</span>
+                      </div>
                     </th>
                   ))}
                 </tr>

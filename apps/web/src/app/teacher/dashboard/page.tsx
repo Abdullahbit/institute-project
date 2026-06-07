@@ -49,6 +49,22 @@ const statusDetails = {
   rejected: { label: "Reddedildi", color: "text-rose-700 bg-rose-50 border-rose-200" },
 };
 
+function getDayDate(dayOfWeekIndex: number) {
+  const current = new Date();
+  const day = current.getDay();
+  // Monday is index 0 in our mapping: dayOfWeekIndex = 0 is Monday, 5 is Saturday
+  // Convert standard JS getDay() (Sunday=0, Monday=1, Saturday=6) to calculate Monday of current week
+  const diff = current.getDate() - day + (day === 0 ? -6 : 1);
+  const monday = new Date(current.setDate(diff));
+  
+  const targetDay = new Date(monday);
+  targetDay.setDate(monday.getDate() + dayOfWeekIndex);
+  
+  const dd = String(targetDay.getDate()).padStart(2, "0");
+  const mm = String(targetDay.getMonth() + 1).padStart(2, "0");
+  return `${dd}.${mm}`;
+}
+
 export default function TeacherDashboard() {
   const { user, role, loading } = useAuth();
   const router = useRouter();
@@ -380,8 +396,9 @@ export default function TeacherDashboard() {
                       <span className="font-bold text-slate-900 text-xs truncate max-w-[160px]">
                         {slot.class_name}
                       </span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-primary/10 text-primary">
-                        {daysOfWeekMap[slot.day_of_week] || "Belirtilmemiş"}
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-primary/10 text-primary flex items-center gap-1">
+                        <span>{daysOfWeekMap[slot.day_of_week] || "Belirtilmemiş"}</span>
+                        <span className="text-[9px] opacity-70">({getDayDate(slot.day_of_week)})</span>
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1">
