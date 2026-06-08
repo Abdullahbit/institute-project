@@ -9,7 +9,7 @@ import {
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { db } from "@workspace/db";
-import { classes, scheduleSlots, profiles, teachers, classEnrollments, students } from "@workspace/db/schema";
+import { classes, scheduleSlots, profiles, teachers, classEnrollments, students, classrooms } from "@workspace/db/schema";
 import { eq, and, ne, or } from "drizzle-orm";
 
 export const classesRouter = router({
@@ -700,4 +700,91 @@ export const classesRouter = router({
         full_name: r.fullName,
       }));
     }),
+
+  listClassrooms: schoolProcedure
+    .query(async ({ ctx }) => {
+      return await db
+        .select()
+        .from(classrooms)
+        .where(
+          and(
+            eq(classrooms.schoolId, ctx.schoolId),
+            eq(classrooms.isActive, true)
+          )
+        )
+        .orderBy(classrooms.name);
+    }),
+
+  createClassroom: subscribedProcedure
+    .input(z.object({ name: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const [inserted] = await db
+        .insert(classrooms)
+        .values({
+          schoolId: ctx.schoolId,
+          name: input.name,
+        })
+        .returning();
+      return { success: true, classroom: inserted };
+    }),
+
+  updateClassroom: subscribedProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        name: z.string().min(1),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const [updated] = await db
+        .update(classrooms)
+        .set({
+          name: input.name,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(classrooms.id, input.id),
+            eq(classrooms.schoolId, ctx.schoolId)
+          )
+        )
+        .returning();
+
+      if (!updated) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Classroom not found",
+        });
+      }
+
+      return { success: true, classroom: updated };
+    }),
+
+  deleteClassroom: subscribedProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const [deleted] = await db
+        .update(classrooms)
+        .set({
+          isActive: false,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(classrooms.id, input.id),
+            eq(classrooms.schoolId, ctx.schoolId)
+          )
+        )
+        .returning();
+
+      if (!deleted) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Classroom not found",
+        });
+      }
+
+      return { success: true };
+    }),
 });
+

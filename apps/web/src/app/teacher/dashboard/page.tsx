@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { AdminShell } from "@/components/admin-shell";
 import { trpc } from "@/lib/trpc";
 import { supabase } from '@/lib/supabaseClient';
+import { useLanguage } from '@/context/LanguageContext';
 import { 
   BookOpen, 
   Shield, 
@@ -24,7 +25,8 @@ import {
   Coffee,
   CalendarDays,
   Eye,
-  Edit3
+  Edit3,
+  ChevronLeft
 } from "lucide-react";
 
 const daysOfWeekMap = [
@@ -49,28 +51,70 @@ const statusDetails = {
   rejected: { label: "Reddedildi", color: "text-rose-700 bg-rose-50 border-rose-200" },
 };
 
-function getDayDate(dayOfWeekIndex: number) {
-  const current = new Date();
-  const day = current.getDay();
-  // Monday is index 0 in our mapping: dayOfWeekIndex = 0 is Monday, 5 is Saturday
-  // Convert standard JS getDay() (Sunday=0, Monday=1, Saturday=6) to calculate Monday of current week
-  const diff = current.getDate() - day + (day === 0 ? -6 : 1);
-  const monday = new Date(current.setDate(diff));
-  
-  const targetDay = new Date(monday);
-  targetDay.setDate(monday.getDate() + dayOfWeekIndex);
-  
-  const dd = String(targetDay.getDate()).padStart(2, "0");
-  const mm = String(targetDay.getMonth() + 1).padStart(2, "0");
-  return `${dd}.${mm}`;
+function getDayOfWeekIndex(date: Date) {
+  const day = date.getDay();
+  return day === 0 ? 6 : day - 1;
 }
 
 export default function TeacherDashboard() {
+  const { language, t } = useLanguage();
+  const [currentDate, setCurrentDate] = useState(new Date());
+  
   const { user, role, loading } = useAuth();
   const router = useRouter();
 
   const { data: openSubstitutes, refetch: refetchSubstitutes } = trpc.alerts.getOpenSubstituteRequests.useQuery();
   const respondMutation = trpc.alerts.respondToSubstituteRequest.useMutation();
+
+  const handlePrevMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+  };
+
+  const handleNextMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+  };
+
+  const handleToday = () => {
+    setCurrentDate(new Date());
+  };
+
+  const weekdays = useMemo(() => {
+    return language === "tr"
+      ? ["Pt", "Sa", "Ça", "Pe", "Cu", "Ct", "Pz"]
+      : ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+  }, [language]);
+
+  const calendarCells = useMemo(() => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const firstDayOfMonth = new Date(year, month, 1);
+    const startDayIndex = getDayOfWeekIndex(firstDayOfMonth);
+    const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
+    
+    const cells: { date: Date; isCurrentMonth: boolean }[] = [];
+    
+    // Previous month padding days
+    const prevMonthDays = new Date(year, month, 0).getDate();
+    for (let i = startDayIndex - 1; i >= 0; i--) {
+      const date = new Date(year, month - 1, prevMonthDays - i);
+      cells.push({ date, isCurrentMonth: false });
+    }
+    
+    // Current month days
+    for (let i = 1; i <= totalDaysInMonth; i++) {
+      const date = new Date(year, month, i);
+      cells.push({ date, isCurrentMonth: true });
+    }
+    
+    // Next month padding days
+    let nextMonthDay = 1;
+    while (cells.length < 42) {
+      const date = new Date(year, month + 1, nextMonthDay++);
+      cells.push({ date, isCurrentMonth: false });
+    }
+    
+    return cells;
+  }, [currentDate]);
 
   // Subscribe to cover requests Realtime updates
   useEffect(() => {
@@ -360,65 +404,118 @@ export default function TeacherDashboard() {
         {/* Ana İki Kolon */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           
-          {/* Sol Kolon: Haftalık Programım */}
-          <div className="lg:col-span-5 bg-white border border-slate-200/80 rounded-xl p-6 shadow-sm flex flex-col gap-4">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <h3 className="font-bold text-slate-800 flex items-center gap-2">
+          {/* Sol Kolon: Aylık Ders Programım */}
+          <div className="lg:col-span-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 rounded-xl p-5 shadow-sm flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 text-sm">
                 <CalendarDays className="h-5 w-5 text-primary" />
-                Haftalık Programım
+                {language === "tr" ? "Aylık Ders Programım" : "My Monthly Schedule"}
               </h3>
-              <span className="text-[10px] font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
-                {slots?.length || 0} Ders
-              </span>
+              
+              {/* Month Navigation */}
+              <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200/50">
+                  <button
+                    onClick={handlePrevMonth}
+                    className="p-1 hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-md transition-all duration-150 cursor-pointer"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </button>
+                  <span className="px-2 text-[10px] font-extrabold text-slate-700 dark:text-slate-200 flex items-center min-w-[80px] justify-center">
+                    {t(`month_${currentDate.getMonth()}` as any)}
+                  </span>
+                  <button
+                    onClick={handleNextMonth}
+                    className="p-1 hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-md transition-all duration-150 cursor-pointer"
+                  >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <button
+                  onClick={handleToday}
+                  className="px-2 py-1 text-[9px] font-extrabold bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-750 text-slate-700 dark:text-slate-300 rounded-md hover:bg-slate-50 transition-all cursor-pointer"
+                >
+                  {language === "tr" ? "Bugün" : "Today"}
+                </button>
+              </div>
             </div>
 
             {loadingSlots || loadingTeachers ? (
               <div className="flex flex-col items-center justify-center py-12 gap-2 text-slate-400">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <span className="text-xs">Ders programı yükleniyor...</span>
+                <span className="text-xs">{language === "tr" ? "Ders programı yükleniyor..." : "Loading schedule..."}</span>
               </div>
             ) : !slots || slots.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 px-4 text-center border border-dashed border-slate-200 rounded-lg">
                 <Coffee className="h-8 w-8 text-slate-300 mb-2" />
-                <span className="text-xs font-semibold text-slate-700">Kayıtlı Ders Yok</span>
+                <span className="text-xs font-semibold text-slate-700">{language === "tr" ? "Kayıtlı Ders Yok" : "No Classes Scheduled"}</span>
                 <p className="text-[11px] text-slate-400 mt-1 max-w-[200px]">
-                  Haftalık programınızda tanımlanmış ders seansı bulunmamaktadır.
+                  {language === "tr" ? "Programınızda tanımlanmış ders seansı bulunmamaktadır." : "There are no classes scheduled in your calendar."}
                 </p>
               </div>
             ) : (
-              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
-                {slots.map((slot) => (
-                  <div 
-                    key={slot.id} 
-                    className="flex flex-col gap-1 p-3 rounded-lg border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors"
-                  >
-                    <div className="flex justify-between items-start">
-                      <span className="font-bold text-slate-900 text-xs truncate max-w-[160px]">
-                        {slot.class_name}
-                      </span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-primary/10 text-primary flex items-center gap-1">
-                        <span>{daysOfWeekMap[slot.day_of_week] || "Belirtilmemiş"}</span>
-                        <span className="text-[9px] opacity-70">({getDayDate(slot.day_of_week)})</span>
-                      </span>
+              <div className="flex flex-col gap-2">
+                {/* Weekday headers */}
+                <div className="grid grid-cols-7 border-b border-slate-200 dark:border-slate-800 pb-1.5 text-center">
+                  {weekdays.map((day) => (
+                    <div key={day} className="text-[9px] font-extrabold text-slate-750 dark:text-slate-200 uppercase tracking-wider">
+                      {day}
                     </div>
-                    <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1">
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3 text-slate-400" />
-                        {slot.start_time} - {slot.end_time}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <MapPin className="h-3 w-3 text-slate-400" />
-                        {slot.room_name}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+
+                {/* Calendar grid */}
+                <div className="grid grid-cols-7 border-l border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                  {calendarCells.map((cell, idx) => {
+                    const cellDayOfWeek = getDayOfWeekIndex(cell.date);
+                    const isToday = cell.date.toDateString() === new Date().toDateString();
+                    const cellLessons = slots.filter((l) => Number(l.day_of_week) === cellDayOfWeek);
+                    const sortedLessons = [...cellLessons].sort((a, b) => a.start_time.localeCompare(b.start_time));
+
+                    return (
+                      <div
+                        key={idx}
+                        className={`min-h-[70px] p-1 border-r border-b border-slate-200 dark:border-slate-800 flex flex-col justify-between transition-all relative ${
+                          cell.isCurrentMonth
+                            ? "bg-white dark:bg-slate-900"
+                            : "bg-slate-50/20 dark:bg-slate-950/10 text-slate-400 dark:text-slate-600"
+                        } ${isToday ? "ring-1 ring-primary ring-inset bg-blue-50/5" : ""}`}
+                      >
+                        <div className="flex justify-between items-center">
+                          <span className={`text-[10px] font-bold h-4 w-4 flex items-center justify-center rounded-full ${
+                            isToday
+                              ? "bg-primary text-white"
+                              : cell.isCurrentMonth
+                                ? "text-slate-955 dark:text-slate-50 font-extrabold"
+                                : "text-slate-450 dark:text-slate-550"
+                          }`}>
+                            {cell.date.getDate()}
+                          </span>
+                        </div>
+
+                        <div className="space-y-0.5 mt-1">
+                          {sortedLessons.map((lesson) => (
+                            <div
+                              key={lesson.id}
+                              className="text-[8px] font-bold px-1 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 flex flex-col gap-0.25"
+                              title={`${lesson.class_name} (${lesson.start_time} - ${lesson.end_time} @ ${lesson.room_name})`}
+                            >
+                              <div className="truncate font-extrabold">{lesson.class_name}</div>
+                              <div className="text-[7px] font-medium opacity-90">{lesson.start_time}-{lesson.end_time}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
 
+
           {/* Sağ Kolon: Saat Raporlama */}
-          <div className="lg:col-span-7 bg-white border border-slate-200/80 rounded-xl p-6 shadow-sm flex flex-col gap-4">
+          <div className="lg:col-span-6 bg-white border border-slate-200/80 rounded-xl p-6 shadow-sm flex flex-col gap-4">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <h3 className="font-bold text-slate-800 flex items-center gap-2">
                 <FileText className="h-5 w-5 text-primary" />

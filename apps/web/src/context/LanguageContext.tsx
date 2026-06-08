@@ -60,6 +60,20 @@ export const translations = {
     alert_no_show: "Devamsızlık",
     alert_hour_approval: "Saat Onayı",
     alert_notification: "Bildirim",
+
+    // Months
+    month_0: "Ocak",
+    month_1: "Şubat",
+    month_2: "Mart",
+    month_3: "Nisan",
+    month_4: "Mayıs",
+    month_5: "Haziran",
+    month_6: "Temmuz",
+    month_7: "Ağustos",
+    month_8: "Eylül",
+    month_9: "Ekim",
+    month_10: "Kasım",
+    month_11: "Aralık",
   },
   en: {
     // Navigation
@@ -116,6 +130,20 @@ export const translations = {
     alert_no_show: "No-Show",
     alert_hour_approval: "Hours Approval",
     alert_notification: "Notification",
+
+    // Months
+    month_0: "January",
+    month_1: "February",
+    month_2: "March",
+    month_3: "April",
+    month_4: "May",
+    month_5: "June",
+    month_6: "July",
+    month_7: "August",
+    month_8: "September",
+    month_9: "October",
+    month_10: "November",
+    month_11: "December",
   }
 };
 
