@@ -46,6 +46,7 @@ export const students = pgTable("students", {
   schoolId: uuid("school_id").notNull().references(() => schools.id),
   userId: uuid("user_id"),
   fullName: text("full_name").notNull(),
+  password: text("password"), // To store raw password for admin viewing
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
