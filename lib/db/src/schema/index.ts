@@ -9,6 +9,8 @@ export const schools = pgTable("schools", {
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
   subscriptionStatus: text("subscription_status"),
+  logoUrl: text("logo_url"),
+  themeColor: text("theme_color"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -47,6 +49,7 @@ export const students = pgTable("students", {
   userId: uuid("user_id"),
   fullName: text("full_name").notNull(),
   password: text("password"), // To store raw password for admin viewing
+  parentPhone: text("parent_phone"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -190,6 +193,16 @@ export const progressReports = pgTable("progress_reports", {
   scoreOverall: integer("score_overall").notNull(),
   notes: text("notes"),
   reportDate: date("report_date").notNull().defaultNow(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// 15. Classrooms Table
+export const classrooms = pgTable("classrooms", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  schoolId: uuid("school_id").notNull().references(() => schools.id),
+  name: text("name").notNull(),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

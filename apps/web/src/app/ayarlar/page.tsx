@@ -79,7 +79,13 @@ export default function AyarlarPage() {
   const [notifSuccess, setNotifSuccess] = useState(false);
   const [accountSuccess, setAccountSuccess] = useState(false);
 
-  // Load from localStorage on mount
+  const [logoUrl, setLogoUrl] = useState("");
+  const [themeColor, setThemeColor] = useState("#3b82f6");
+
+  const { data: brandingData, refetch: refetchBranding } = trpc.admin.getSchoolBranding.useQuery();
+  const updateBranding = trpc.admin.updateSchoolBranding.useMutation();
+
+  // Load from localStorage & DB on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
       setSchoolName(localStorage.getItem("schoolName") || "Bright Minds Dil Okulu");
@@ -87,6 +93,8 @@ export default function AyarlarPage() {
       setSchoolEmail(localStorage.getItem("schoolEmail") || "info@brightminds.edu.tr");
       setSchoolPhone(localStorage.getItem("schoolPhone") || "+90 212 555 00 00");
       setSchoolAddress(localStorage.getItem("schoolAddress") || "Bağcılar Mah. Eğitim Cad. No:12, İstanbul");
+      setLogoUrl(localStorage.getItem("logoUrl") || "");
+      setThemeColor(localStorage.getItem("themeColor") || "#3b82f6");
 
       setUserName(localStorage.getItem("userName") || "Admin Kullanıcı");
       setUserEmail(localStorage.getItem("userEmail") || "admin@brightminds.edu.tr");
@@ -102,6 +110,19 @@ export default function AyarlarPage() {
     }
   }, []);
 
+  useEffect(() => {
+    if (brandingData) {
+      setSchoolName(brandingData.name || "");
+      setLogoUrl(brandingData.logoUrl || "");
+      setThemeColor(brandingData.themeColor || "#3b82f6");
+      if (typeof window !== "undefined") {
+        localStorage.setItem("schoolName", brandingData.name || "");
+        localStorage.setItem("logoUrl", brandingData.logoUrl || "");
+        localStorage.setItem("themeColor", brandingData.themeColor || "#3b82f6");
+      }
+    }
+  }, [brandingData]);
+
   const toggleNotification = (key: keyof typeof notifications) => {
     setNotifications((prev) => ({
       ...prev,
@@ -109,24 +130,38 @@ export default function AyarlarPage() {
     }));
   };
 
-  const handleSaveSchool = () => {
+  const handleSaveSchool = async () => {
     setSavingSchool(true);
     setSchoolSuccess(false);
-    setTimeout(() => {
+    try {
+      await updateBranding.mutateAsync({
+        name: schoolName,
+        logo_url: logoUrl || "",
+        theme_color: themeColor || "#3b82f6",
+      });
+
       if (typeof window !== "undefined") {
         localStorage.setItem("schoolName", schoolName);
         localStorage.setItem("schoolType", schoolType);
         localStorage.setItem("schoolEmail", schoolEmail);
         localStorage.setItem("schoolPhone", schoolPhone);
         localStorage.setItem("schoolAddress", schoolAddress);
+        localStorage.setItem("logoUrl", logoUrl);
+        localStorage.setItem("themeColor", themeColor);
         
         // Dispatch event so AdminShell knows to reload school identity
         window.dispatchEvent(new Event("settings-updated"));
       }
-      setSavingSchool(false);
+
+      await refetchBranding();
       setSchoolSuccess(true);
       setTimeout(() => setSchoolSuccess(false), 3000);
-    }, 800);
+    } catch (err: any) {
+      console.error(err);
+      alert(err?.message || "Okul bilgileri kaydedilemedi.");
+    } finally {
+      setSavingSchool(false);
+    }
   };
 
   const handleSaveNotifications = () => {
@@ -217,6 +252,34 @@ export default function AyarlarPage() {
                   onChange={(e) => setSchoolAddress(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
                 />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Logo URL</label>
+                <input
+                  type="text"
+                  value={logoUrl}
+                  onChange={(e) => setLogoUrl(e.target.value)}
+                  placeholder="https://example.com/logo.png"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Tema Rengi (Hex)</label>
+                <div className="flex gap-2">
+                  <input
+                    type="color"
+                    value={themeColor || "#3b82f6"}
+                    onChange={(e) => setThemeColor(e.target.value)}
+                    className="h-10 w-12 bg-slate-50 border border-slate-200 rounded-lg p-1 cursor-pointer focus:outline-none focus:border-primary focus:bg-white transition-all"
+                  />
+                  <input
+                    type="text"
+                    value={themeColor}
+                    onChange={(e) => setThemeColor(e.target.value)}
+                    placeholder="#3b82f6"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
+                  />
+                </div>
               </div>
             </div>
             

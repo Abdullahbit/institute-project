@@ -1,4 +1,4 @@
-import { router, schoolProcedure } from "../trpc/trpc.js";
+import { router, schoolProcedure, subscribedProcedure } from "../trpc/trpc.js";
 import { logAttendanceInputSchema, submitProgressReportInputSchema } from "@institute/types";
 import { TRPCError } from "@trpc/server";
 import { db } from "@workspace/db";
@@ -16,6 +16,7 @@ export const studentsRouter = router({
           userId: students.userId,
           fullName: students.fullName,
           password: students.password,
+          parentPhone: students.parentPhone,
           isActive: students.isActive,
           createdAt: students.createdAt,
           updatedAt: students.updatedAt,
@@ -57,6 +58,7 @@ export const studentsRouter = router({
         full_name: r.fullName,
         email: r.userId ? userEmailsMap.get(r.userId) || "E-posta bulunamadı" : "Bağlantısız Hesap",
         password: r.password || null,
+        parent_phone: r.parentPhone,
         is_active: r.isActive,
         class_id: r.classId,
         class_name: r.className,
@@ -65,12 +67,13 @@ export const studentsRouter = router({
       }));
     }),
 
-  create: schoolProcedure
+  create: subscribedProcedure
     .input(
       z.object({
         full_name: z.string().min(1),
         email: z.string().email().optional(),
         password: z.string().min(6).optional(),
+        parent_phone: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -146,6 +149,7 @@ export const studentsRouter = router({
         .values({
           schoolId: ctx.schoolId,
           fullName: input.full_name,
+          parentPhone: input.parent_phone || null,
           userId,
           password: input.password || null,
           isActive: true,
@@ -159,7 +163,108 @@ export const studentsRouter = router({
       };
     }),
 
-  logAttendance: schoolProcedure
+  bulkCreate: subscribedProcedure
+    .input(
+      z.object({
+        students: z.array(
+          z.object({
+            full_name: z.string().min(1),
+            email: z.string().email().optional(),
+            password: z.string().min(6).optional(),
+            parent_phone: z.string().optional(),
+          })
+        ),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.userId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Authentication required",
+        });
+      }
+
+      const [caller] = await db
+        .select()
+        .from(profiles)
+        .where(eq(profiles.id, ctx.userId))
+        .limit(1);
+
+      if (!caller || caller.role !== "admin") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only administrators can create student profiles",
+        });
+      }
+
+      const recordsToInsert = [];
+
+      for (const item of input.students) {
+        let userId: string | null = null;
+        if (item.email && ctx.supabase) {
+          try {
+            const { data: listData } = await ctx.supabase.auth.admin.listUsers();
+            const existingUser = listData?.users?.find((u: any) => u.email === item.email);
+            if (existingUser) {
+              userId = existingUser.id;
+            } else if (item.password) {
+              const { data: createData, error: createError } = await ctx.supabase.auth.admin.createUser({
+                email: item.email,
+                password: item.password,
+                user_metadata: {
+                  school_id: ctx.schoolId,
+                  role: "student",
+                  full_name: item.full_name,
+                },
+                email_confirm: true,
+              });
+              if (createError) {
+                console.error(`Failed to create auth for ${item.email}: ${createError.message}`);
+              } else if (createData.user) {
+                userId = createData.user.id;
+                
+                // Sync in profiles table
+                await db.insert(profiles).values({
+                  id: userId,
+                  schoolId: ctx.schoolId,
+                  role: "student",
+                  fullName: item.full_name,
+                  isActive: true,
+                });
+              }
+            }
+          } catch (e: any) {
+            console.error("Failed to lookup/create student in auth for bulk:", e);
+          }
+        }
+
+        recordsToInsert.push({
+          schoolId: ctx.schoolId,
+          fullName: item.full_name,
+          parentPhone: item.parent_phone || null,
+          userId,
+          isActive: true,
+        });
+      }
+
+      if (recordsToInsert.length > 0) {
+        const inserted = await db
+          .insert(students)
+          .values(recordsToInsert)
+          .returning();
+        return {
+          success: true,
+          count: inserted.length,
+        };
+      }
+
+      return {
+        success: true,
+        count: 0,
+      };
+    }),
+
+  logAttendance: subscribedProcedure
     .input(logAttendanceInputSchema)
     .mutation(async ({ ctx, input }) => {
       if (!ctx.userId) {
@@ -216,7 +321,7 @@ export const studentsRouter = router({
       return { success: true, presentCount };
     }),
 
-  submitProgressReport: schoolProcedure
+  submitProgressReport: subscribedProcedure
     .input(submitProgressReportInputSchema)
     .mutation(async ({ ctx, input }) => {
       if (!ctx.userId) {

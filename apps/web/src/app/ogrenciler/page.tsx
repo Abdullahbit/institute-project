@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { AdminShell } from "@/components/admin-shell";
 import { trpc } from "@/lib/trpc";
-import { UserPlus, Eye, Pencil, X, Check, Loader2, Calendar, Copy } from "lucide-react";
+import { UserPlus, Eye, Pencil, X, Check, Loader2, Calendar, Copy, Upload } from "lucide-react";
 
 export default function OgrencilerPage() {
   const { data: apiData, isLoading, error, refetch } = trpc.students.list.useQuery();
@@ -16,6 +16,7 @@ export default function OgrencilerPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [parentPhone, setParentPhone] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
 
@@ -49,6 +50,14 @@ export default function OgrencilerPage() {
   const [classSaving, setClassSaving] = useState(false);
 
   const createStudent = trpc.students.create.useMutation();
+  const bulkCreateStudent = trpc.students.bulkCreate.useMutation();
+
+  // Bulk import states
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
+  const [csvStudents, setCsvStudents] = useState<any[]>([]);
+  const [csvFileName, setCsvFileName] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
 
   // Load initial students
   useEffect(() => {
@@ -69,6 +78,7 @@ export default function OgrencilerPage() {
         full_name: fullName,
         email: email || undefined,
         password: password || undefined,
+        parent_phone: parentPhone || undefined,
       });
 
       await refetch();
@@ -84,6 +94,7 @@ export default function OgrencilerPage() {
       setFullName("");
       setEmail("");
       setPassword("");
+      setParentPhone("");
     } catch (err: any) {
       setFormError(err?.message || "Öğrenci kaydedilemedi.");
     } finally {
@@ -133,6 +144,112 @@ export default function OgrencilerPage() {
     }
   };
 
+  const parseCSV = (text: string) => {
+    const lines = text.split(/\r?\n/);
+    if (lines.length === 0) return [];
+    
+    const firstLine = lines[0];
+    const delimiter = firstLine.includes(";") ? ";" : ",";
+    const headers = firstLine.split(delimiter).map(h => h.trim().toLowerCase());
+    
+    const parsedStudents: any[] = [];
+    
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      
+      const columns = line.split(delimiter).map(c => c.trim().replace(/^["']|["']$/g, ""));
+      const student: any = {
+        full_name: "",
+        email: "",
+        password: "",
+        parent_phone: ""
+      };
+      
+      headers.forEach((header, index) => {
+        const val = columns[index] || "";
+        if (header.includes("ad") || header.includes("name") || header.includes("soyad")) {
+          student.full_name = val;
+        } else if (header.includes("mail") || header.includes("eposta") || header.includes("e-posta")) {
+          student.email = val;
+        } else if (header.includes("şifre") || header.includes("sifre") || header.includes("pass")) {
+          student.password = val;
+        } else if (header.includes("tel") || header.includes("phone") || header.includes("veli")) {
+          student.parent_phone = val;
+        }
+      });
+      
+      if (!student.full_name && columns[0]) {
+        student.full_name = columns[0];
+        student.email = columns[1] || "";
+        student.password = columns[2] || "";
+        student.parent_phone = columns[3] || "";
+      }
+      
+      if (student.full_name) {
+        parsedStudents.push(student);
+      }
+    }
+    
+    return parsedStudents;
+  };
+
+  const handleCsvFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setCsvFileName(file.name);
+    setImportError(null);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      if (text) {
+        const parsed = parseCSV(text);
+        if (parsed.length === 0) {
+          setImportError("CSV dosyasından geçerli öğrenci verisi okunamadı. Lütfen formatı kontrol edin.");
+        } else {
+          setCsvStudents(parsed);
+        }
+      }
+    };
+    reader.onerror = () => {
+      setImportError("Dosya okunurken bir hata oluştu.");
+    };
+    reader.readAsText(file);
+  };
+
+  const handleImportStudents = async () => {
+    if (csvStudents.length === 0) return;
+
+    setImporting(true);
+    setImportError(null);
+
+    try {
+      const res = await bulkCreateStudent.mutateAsync({
+        students: csvStudents.map(s => ({
+          full_name: s.full_name,
+          email: s.email || undefined,
+          password: s.password || undefined,
+          parent_phone: s.parent_phone || undefined,
+        }))
+      });
+
+      if (res.success) {
+        await refetch();
+        setSuccessMsg(true);
+        setTimeout(() => setSuccessMsg(false), 3000);
+        setBulkModalOpen(false);
+        setCsvStudents([]);
+        setCsvFileName("");
+      }
+    } catch (err: any) {
+      setImportError(err?.message || "Öğrenciler içe aktarılamadı.");
+    } finally {
+      setImporting(false);
+    }
+  };
+
   return (
     <AdminShell
       title="Öğrenciler"
@@ -152,13 +269,27 @@ export default function OgrencilerPage() {
             )
           )}
         </div>
-        <button 
-          onClick={() => setModalOpen(true)}
-          className="inline-flex items-center gap-2 bg-primary hover:bg-blue-600 text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-sm transition-colors"
-        >
-          <UserPlus className="h-4 w-4" />
-          Yeni Öğrenci Ekle
-        </button>
+        <div className="flex gap-3">
+          <button 
+            onClick={() => {
+              setCsvStudents([]);
+              setCsvFileName("");
+              setImportError(null);
+              setBulkModalOpen(true);
+            }}
+            className="inline-flex items-center gap-2 border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-semibold px-4 py-2.5 rounded-lg shadow-sm transition-colors cursor-pointer"
+          >
+            <Upload className="h-4 w-4 text-slate-500" />
+            Toplu Öğrenci Ekle
+          </button>
+          <button 
+            onClick={() => setModalOpen(true)}
+            className="inline-flex items-center gap-2 bg-primary hover:bg-blue-600 text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-sm transition-colors cursor-pointer"
+          >
+            <UserPlus className="h-4 w-4" />
+            Yeni Öğrenci Ekle
+          </button>
+        </div>
       </div>
 
       {isLoading && (
@@ -182,6 +313,7 @@ export default function OgrencilerPage() {
                   <th className="px-6 py-4">Ad Soyad</th>
                   <th className="px-6 py-4">E-posta</th>
                   <th className="px-6 py-4">Şifre</th>
+                  <th className="px-6 py-4">Veli Telefonu</th>
                   <th className="px-6 py-4">Rol</th>
                   <th className="px-6 py-4">Kayıtlı Sınıf</th>
                   <th className="px-6 py-4">Durum</th>
@@ -191,7 +323,7 @@ export default function OgrencilerPage() {
               <tbody className="divide-y divide-slate-100">
                 {students.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-8 text-center text-slate-500 font-medium">
+                    <td colSpan={8} className="px-6 py-8 text-center text-slate-500 font-medium">
                       Kayıtlı öğrenci bulunmamaktadır.
                     </td>
                   </tr>
@@ -201,6 +333,7 @@ export default function OgrencilerPage() {
                       <td className="px-6 py-4 font-bold text-slate-900">{s.full_name}</td>
                       <td className="px-6 py-4 text-slate-600 font-mono text-xs select-all">{s.email || "—"}</td>
                       <td className="px-6 py-4 text-slate-650 font-mono text-xs select-all">{s.password || "—"}</td>
+                      <td className="px-6 py-4 text-slate-600 text-xs font-semibold">{s.parent_phone || "—"}</td>
                       <td className="px-6 py-4 text-slate-600 font-medium">Öğrenci</td>
                       <td className="px-6 py-4">
                         {s.class_name ? (
@@ -444,6 +577,17 @@ export default function OgrencilerPage() {
                     />
                   </div>
 
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Veli Telefonu</label>
+                    <input 
+                      type="text" 
+                      value={parentPhone}
+                      onChange={(e) => setParentPhone(e.target.value)}
+                      placeholder="+90 555 444 33 22"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
+                    />
+                  </div>
+
                   <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                     <button
                       type="button"
@@ -470,6 +614,139 @@ export default function OgrencilerPage() {
                   </div>
                 </form>
               </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Toplu Öğrenci Ekleme Modali */}
+      {bulkModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm"
+            onMouseDown={() => setBulkModalOpen(false)}
+          />
+          {/* Modal Container */}
+          <div 
+            className="relative bg-white rounded-2xl w-full max-w-2xl p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-200"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <h3 className="font-bold text-slate-900 text-lg">Toplu Öğrenci İçe Aktar</h3>
+              <button 
+                onClick={() => setBulkModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            {importError && (
+              <div className="mt-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
+                {importError}
+              </div>
+            )}
+
+            {csvStudents.length === 0 ? (
+              <div className="space-y-4 pt-4">
+                <div className="border border-dashed border-slate-200 rounded-xl p-8 text-center bg-slate-50/50 hover:bg-slate-50 transition-all">
+                  <input
+                    type="file"
+                    accept=".csv"
+                    onChange={handleCsvFileUpload}
+                    id="csv-file-input"
+                    className="hidden"
+                  />
+                  <label htmlFor="csv-file-input" className="cursor-pointer flex flex-col items-center gap-3">
+                    <Upload className="h-10 w-10 text-slate-400 bg-white p-2 rounded-lg shadow-sm border border-slate-100" />
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">CSV Dosyası Yükleyin</p>
+                      <p className="text-xs text-slate-500 mt-1">Sürükleyip bırakın veya bilgisayarınızdan seçin</p>
+                    </div>
+                  </label>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
+                  <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">CSV Şablon Yapısı</h4>
+                  <p className="text-xs text-slate-600 font-medium">Dosyanız aşağıdaki gibi sütun başlıklarına sahip olmalıdır (sıralama fark etmez):</p>
+                  <code className="block text-[11px] font-mono bg-slate-900 text-slate-100 rounded-lg p-2.5 overflow-x-auto select-all">
+                    Ad Soyad,E-posta,Şifre,Veli Telefonu
+                  </code>
+                  <p className="text-[11px] text-slate-500 font-medium">Not: E-posta ve Şifre girilirse, öğrencilere otomatik giriş hesabı oluşturulacaktır.</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4 pt-4">
+                <div className="flex justify-between items-center bg-blue-50 border border-blue-100 rounded-xl p-3.5">
+                  <span className="text-xs font-semibold text-blue-800">
+                    Dosya: <span className="font-bold">{csvFileName}</span> — {csvStudents.length} öğrenci bulundu.
+                  </span>
+                  <button
+                    onClick={() => {
+                      setCsvStudents([]);
+                      setCsvFileName("");
+                      setImportError(null);
+                    }}
+                    className="text-xs font-bold text-blue-700 hover:text-blue-900 underline"
+                  >
+                    Dosyayı Değiştir
+                  </button>
+                </div>
+
+                <div className="border border-slate-200 rounded-xl overflow-hidden max-h-60 overflow-y-auto">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-slate-50 border-b border-slate-100 text-slate-600 font-bold uppercase tracking-wider">
+                      <tr>
+                        <th className="px-4 py-2.5">Ad Soyad</th>
+                        <th className="px-4 py-2.5">E-posta</th>
+                        <th className="px-4 py-2.5">Şifre</th>
+                        <th className="px-4 py-2.5">Veli Telefonu</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium text-slate-700 font-sans">
+                      {csvStudents.map((student, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/50">
+                          <td className="px-4 py-2 font-bold text-slate-900">{student.full_name}</td>
+                          <td className="px-4 py-2 font-mono">{student.email || <span className="text-slate-400 italic">yok</span>}</td>
+                          <td className="px-4 py-2 font-mono">{student.password || <span className="text-slate-400 italic">yok</span>}</td>
+                          <td className="px-4 py-2">{student.parent_phone || <span className="text-slate-400 italic">yok</span>}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCsvStudents([]);
+                      setCsvFileName("");
+                      setImportError(null);
+                      setBulkModalOpen(false);
+                    }}
+                    disabled={importing}
+                    className="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    İptal
+                  </button>
+                  <button
+                    onClick={handleImportStudents}
+                    disabled={importing}
+                    className="px-4 py-2 bg-primary hover:bg-blue-600 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {importing ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        İçe Aktarılıyor...
+                      </>
+                    ) : (
+                      "İçe Aktarmayı Başlat"
+                    )}
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { router, publicProcedure, schoolProcedure } from "../trpc/trpc.js";
+import { router, publicProcedure, schoolProcedure, subscribedProcedure } from "../trpc/trpc.js";
 import { createInvitationInputSchema } from "@institute/types";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -158,8 +158,8 @@ export const adminRouter = router({
       const rawToken = crypto.randomBytes(32).toString("hex");
       const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
 
-      const expiresAt = new Date();
-      expiresAt.setHours(expiresAt.getHours() + input.expires_in_hours);
+      const createdAt = new Date();
+      const expiresAt = new Date(createdAt.getTime() + input.expires_in_hours * 60 * 60 * 1000);
 
       // 3. Register a new row in invitations table linked to school_id
       await db.insert(invitations).values({
@@ -168,6 +168,7 @@ export const adminRouter = router({
         role: input.role,
         tokenHash,
         expiresAt,
+        createdAt,
         isActive: true,
       });
 
@@ -285,5 +286,70 @@ export const adminRouter = router({
           admins: adminsDetail,
         };
       });
+    }),
+
+  getSchoolBranding: schoolProcedure
+    .query(async ({ ctx }) => {
+      const [school] = await db
+        .select({
+          id: schools.id,
+          name: schools.name,
+          logoUrl: schools.logoUrl,
+          themeColor: schools.themeColor,
+        })
+        .from(schools)
+        .where(eq(schools.id, ctx.schoolId))
+        .limit(1);
+
+      if (!school) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "School not found",
+        });
+      }
+
+      return school;
+    }),
+
+  updateSchoolBranding: subscribedProcedure
+    .input(
+      z.object({
+        name: z.string().min(1).optional(),
+        logo_url: z.string().url().or(z.string().length(0)).nullable().optional(),
+        theme_color: z.string().regex(/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/).or(z.string().length(0)).nullable().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.userId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Authentication required",
+        });
+      }
+
+      const [caller] = await db
+        .select()
+        .from(profiles)
+        .where(eq(profiles.id, ctx.userId))
+        .limit(1);
+
+      if (!caller || caller.role !== "admin") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only administrators can update school configuration",
+        });
+      }
+
+      const updateData: Record<string, any> = { updatedAt: new Date() };
+      if (input.name !== undefined) updateData.name = input.name;
+      if (input.logo_url !== undefined) updateData.logoUrl = input.logo_url || null;
+      if (input.theme_color !== undefined) updateData.themeColor = input.theme_color || null;
+
+      await db
+        .update(schools)
+        .set(updateData)
+        .where(eq(schools.id, ctx.schoolId));
+
+      return { success: true };
     }),
 });
