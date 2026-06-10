@@ -243,6 +243,7 @@ export const studentsRouter = router({
           fullName: item.full_name,
           parentPhone: item.parent_phone || null,
           userId,
+          password: item.password || null,
           isActive: true,
         });
       }
