@@ -110,6 +110,25 @@ export default function ProgramPage() {
   const [editingClassroomId, setEditingClassroomId] = useState<string | null>(null);
   const [editingClassroomName, setEditingClassroomName] = useState("");
 
+  // Day details modal states
+  const [dayDetailsModalOpen, setDayDetailsModalOpen] = useState(false);
+  const [selectedDayDate, setSelectedDayDate] = useState<Date | null>(null);
+
+  // Filter lessons
+  const filteredLessons = (apiData || []).filter((lesson) => {
+    if (selectedTeacher && lesson.teacher_name !== selectedTeacher) return false;
+    if (selectedClass && lesson.class_name !== selectedClass) return false;
+    if (selectedRoom && lesson.room_name !== selectedRoom) return false;
+    return true;
+  });
+
+  const selectedDayLessons = useMemo(() => {
+    if (!selectedDayDate) return [];
+    const dayIndex = getDayOfWeekIndex(selectedDayDate);
+    return filteredLessons.filter((l) => Number(l.day_of_week) === dayIndex)
+      .sort((a, b) => a.start_time.localeCompare(b.start_time));
+  }, [selectedDayDate, filteredLessons]);
+
   // Mutations
   const createSlotMutation = trpc.classes.createSlot.useMutation();
   const updateSlotMutation = trpc.classes.updateSlot.useMutation();
@@ -121,14 +140,6 @@ export default function ProgramPage() {
   // Extract unique options for filter dropdowns from backend data
   const uniqueTeachers = Array.from(new Set((apiData || []).map((l) => l.teacher_name))).filter(Boolean);
   const uniqueClasses = Array.from(new Set((apiData || []).map((l) => l.class_name))).filter(Boolean);
-
-  // Filter lessons
-  const filteredLessons = (apiData || []).filter((lesson) => {
-    if (selectedTeacher && lesson.teacher_name !== selectedTeacher) return false;
-    if (selectedClass && lesson.class_name !== selectedClass) return false;
-    if (selectedRoom && lesson.room_name !== selectedRoom) return false;
-    return true;
-  });
 
   const handleCreateClassroom = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -492,7 +503,11 @@ export default function ProgramPage() {
               return (
                 <div 
                   key={idx} 
-                  className={`min-h-[140px] p-2 border-r border-b border-slate-200 dark:border-slate-850 last:border-r-0 [(&:nth-child(7n))]:border-r-0 relative group flex flex-col justify-between transition-all duration-200 ${
+                  onClick={() => {
+                    setSelectedDayDate(cell.date);
+                    setDayDetailsModalOpen(true);
+                  }}
+                  className={`min-h-[140px] p-2 border-r border-b border-slate-200 dark:border-slate-850 last:border-r-0 [(&:nth-child(7n))]:border-r-0 relative group flex flex-col justify-between transition-all duration-200 cursor-pointer ${
                     cell.isCurrentMonth 
                       ? "bg-white dark:bg-slate-900 hover:bg-slate-50/40 dark:hover:bg-slate-800/20" 
                       : "bg-slate-50/20 dark:bg-slate-950/10 text-slate-400 dark:text-slate-600"
@@ -560,7 +575,10 @@ export default function ProgramPage() {
 
                   {/* Add button visible on cell hover */}
                   <button
-                    onClick={() => handleOpenCreateModalForDay(cell.date)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenCreateModalForDay(cell.date);
+                    }}
                     className="mt-2 w-full py-1 border border-dashed border-slate-200 hover:border-primary hover:bg-primary/5 dark:border-slate-750 dark:hover:border-primary/50 text-[10px] text-slate-400 hover:text-primary rounded-md flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 cursor-pointer"
                   >
                     <Plus className="h-3 w-3" />
@@ -738,6 +756,129 @@ export default function ProgramPage() {
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Day Details Modal */}
+      {dayDetailsModalOpen && selectedDayDate && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center p-4 animate-fade-in">
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm"
+            onClick={() => setDayDetailsModalOpen(false)}
+          />
+          {/* Modal Container */}
+          <div className="relative bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg p-6 shadow-2xl border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div>
+                <h3 className="font-bold text-slate-900 dark:text-white text-lg">
+                  {selectedDayDate.toLocaleDateString(language === "tr" ? "tr-TR" : "en-US", {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })}
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  {language === "tr" ? "Bugüne ait ders programı detayları" : "Schedule details for this day"}
+                </p>
+              </div>
+              <button 
+                onClick={() => setDayDetailsModalOpen(false)}
+                className="text-slate-400 hover:text-slate-605 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Lesson List */}
+            <div className="py-4 space-y-3 max-h-[350px] overflow-y-auto pr-1 custom-scrollbar">
+              {selectedDayLessons.length === 0 ? (
+                <div className="text-center py-12 text-slate-405 dark:text-slate-500 text-sm font-medium">
+                  {language === "tr" ? "Bu güne ait planlanmış bir ders bulunmamaktadır." : "No lessons scheduled for this day."}
+                </div>
+              ) : (
+                selectedDayLessons.map((lesson) => {
+                  const theme = getLessonTheme(lesson.class_name);
+                  return (
+                    <div 
+                      key={lesson.id} 
+                      className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800/80 ${theme.bg} transition-all duration-200 relative group/item`}
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-2 h-2 rounded-full ${theme.dot}`} />
+                          <h4 className="font-bold text-slate-900 dark:text-white text-sm">
+                            {lesson.class_name}
+                          </h4>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2 text-xs text-slate-600 dark:text-slate-350 font-medium">
+                          <div className="flex items-center gap-1.5">
+                            <Clock className="h-3.5 w-3.5 text-slate-400" />
+                            <span>{lesson.start_time} - {lesson.end_time}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <MapPin className="h-3.5 w-3.5 text-slate-400" />
+                            <span>{lesson.room_name}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 col-span-2 mt-1">
+                            <User className="h-3.5 w-3.5 text-slate-400" />
+                            <span>{lesson.teacher_name}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex gap-2 mt-3 sm:mt-0 justify-end">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDayDetailsModalOpen(false);
+                            handleOpenEditModal(lesson);
+                          }}
+                          className="px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/10 rounded-lg transition-all border border-primary/20 bg-white/80 dark:bg-slate-800/80 cursor-pointer"
+                        >
+                          {language === "tr" ? "Düzenle" : "Edit"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleDeleteLesson(lesson.id);
+                          }}
+                          className="px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-lg transition-all border border-rose-200 dark:border-rose-900/40 bg-white/80 dark:bg-slate-800/80 cursor-pointer"
+                        >
+                          {language === "tr" ? "Sil" : "Delete"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Bottom Add Lesson Action */}
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setDayDetailsModalOpen(false)}
+                className="px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-655 dark:text-slate-305 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold rounded-lg transition-colors cursor-pointer"
+              >
+                {language === "tr" ? "Kapat" : "Close"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDayDetailsModalOpen(false);
+                  handleOpenCreateModalForDay(selectedDayDate);
+                }}
+                className="px-4 py-2 bg-primary hover:bg-blue-600 text-white text-xs font-bold rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="h-4 w-4" />
+                {language === "tr" ? "Yeni Ders Ekle" : "Add Lesson"}
+              </button>
+            </div>
           </div>
         </div>
       )}
