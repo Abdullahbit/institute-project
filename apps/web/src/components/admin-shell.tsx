@@ -14,7 +14,8 @@ import {
   Clock,
   Settings,
   LogOut,
-  BookOpen
+  BookOpen,
+  MessageSquare
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
@@ -59,21 +60,25 @@ const adminNavItems = [
   { href: "/ogrenciler", label: "Öğrenciler", translationKey: "nav_students" as const, icon: GraduationCap },
   { href: "/saat-takibi", label: "Saat Takibi", translationKey: "nav_hours" as const, icon: Clock },
   { href: "/uyarilar", label: "Uyarılar", translationKey: "nav_alerts" as const, icon: Bell },
+  { href: "/mesajlar", label: "Mesajlar", translationKey: "nav_messages" as const, icon: MessageSquare },
   { href: "/ayarlar", label: "Ayarlar", translationKey: "nav_settings" as const, icon: Settings },
 ];
 
 const founderNavItems = [
   { href: "/", label: "Ana Sayfa", translationKey: "nav_home" as const, icon: Home },
+  { href: "/mesajlar", label: "Mesajlar", translationKey: "nav_messages" as const, icon: MessageSquare },
   { href: "/ayarlar", label: "Ayarlar", translationKey: "nav_settings" as const, icon: Settings },
 ];
 
 const teacherNavItems = [
   { href: "/teacher/dashboard", label: "Ana Sayfa", translationKey: "nav_home" as const, icon: Home },
   { href: "/teacher/today", label: "Bugünkü Derslerim", translationKey: "nav_program" as const, icon: Calendar },
+  { href: "/teacher/mesajlar", label: "Mesajlar", translationKey: "nav_messages" as const, icon: MessageSquare },
 ];
 
 const studentNavItems = [
   { href: "/student/dashboard", label: "Ana Sayfa", translationKey: "nav_home" as const, icon: Home },
+  { href: "/student/mesajlar", label: "Mesajlar", translationKey: "nav_messages" as const, icon: MessageSquare },
 ];
 
 export function AdminShell({
@@ -90,9 +95,14 @@ export function AdminShell({
   const [schoolName, setSchoolName] = useState("Bright Minds");
   const [schoolType, setSchoolType] = useState("Dil Okulu");
   const [logoUrl, setLogoUrl] = useState("");
+  const [logoError, setLogoError] = useState(false);
   const [themeColor, setThemeColor] = useState("#3b82f6");
   const { logout, role, user } = useAuth();
   const { language, setLanguage, t } = useLanguage();
+
+  React.useEffect(() => {
+    setLogoError(false);
+  }, [logoUrl]);
 
   const { data: branding, refetch } = trpc.admin.getSchoolBranding.useQuery(undefined, {
     enabled: !!user,
@@ -174,8 +184,13 @@ export function AdminShell({
       {/* Brand */}
       <div className="px-6 py-6 border-b border-sidebar-border">
         <Link href="/" className="flex items-center gap-3">
-          {logoUrl ? (
-            <img src={logoUrl} className="h-8 w-8 object-contain rounded-md bg-white p-0.5" alt={schoolName} />
+          {logoUrl && !logoError ? (
+            <img 
+              src={logoUrl} 
+              className="h-8 w-8 object-contain rounded-md bg-white p-0.5" 
+              alt={schoolName} 
+              onError={() => setLogoError(true)}
+            />
           ) : (
             <div className="h-8 w-8 bg-primary rounded-md flex items-center justify-center shadow-sm">
               <GraduationCap className="h-5 w-5 text-primary-foreground" />
@@ -260,8 +275,13 @@ export function AdminShell({
         {/* Mobile Header */}
         <header className="md:hidden flex items-center justify-between px-4 py-3 border-b bg-sidebar text-sidebar-foreground">
           <div className="flex items-center gap-2">
-            {logoUrl ? (
-              <img src={logoUrl} className="h-6 w-6 object-contain rounded bg-white p-0.5" alt={schoolName} />
+            {logoUrl && !logoError ? (
+              <img 
+                src={logoUrl} 
+                className="h-6 w-6 object-contain rounded bg-white p-0.5" 
+                alt={schoolName} 
+                onError={() => setLogoError(true)}
+              />
             ) : (
               <div className="h-6 w-6 bg-primary rounded flex items-center justify-center">
                 <GraduationCap className="h-4 w-4 text-white" />

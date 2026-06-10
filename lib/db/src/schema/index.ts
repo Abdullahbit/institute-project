@@ -48,6 +48,7 @@ export const students = pgTable("students", {
   schoolId: uuid("school_id").notNull().references(() => schools.id),
   userId: uuid("user_id"),
   fullName: text("full_name").notNull(),
+  password: text("password"), // To store raw password for admin viewing
   parentPhone: text("parent_phone"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -206,3 +207,14 @@ export const classrooms = pgTable("classrooms", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// 16. Messages Table
+export const messages = pgTable("messages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  schoolId: uuid("school_id").notNull().references(() => schools.id),
+  senderId: uuid("sender_id").notNull().references(() => profiles.id),
+  receiverId: uuid("receiver_id").notNull().references(() => profiles.id),
+  content: text("content").notNull(),
+  isRead: boolean("is_read").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

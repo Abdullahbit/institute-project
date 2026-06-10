@@ -8,6 +8,7 @@ import { useAuth } from "@/context/AuthContext";
 
 export default function AyarlarPage() {
   const { user } = useAuth();
+  const isFounder = user?.email === "simaalouzi@gmail.com";
 
   // Okul Bilgileri State
   const [schoolName, setSchoolName] = useState("Bright Minds Dil Okulu");
@@ -94,6 +95,12 @@ export default function AyarlarPage() {
 
   const { data: brandingData, refetch: refetchBranding } = trpc.admin.getSchoolBranding.useQuery();
   const updateBranding = trpc.admin.updateSchoolBranding.useMutation();
+
+  useEffect(() => {
+    if (!isFounder && inviteRole === "admin") {
+      setInviteRole("teacher");
+    }
+  }, [isFounder, inviteRole]);
 
   // Load from localStorage & DB on mount
   useEffect(() => {
@@ -499,7 +506,7 @@ export default function AyarlarPage() {
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
                   >
                     <option value="teacher">Öğretmen (Teacher)</option>
-                    <option value="admin">Yönetici (Admin)</option>
+                    {isFounder && <option value="admin">Yönetici (Admin)</option>}
                     <option value="student">Öğrenci (Student)</option>
                   </select>
                 </div>

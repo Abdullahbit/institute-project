@@ -28,15 +28,5 @@ CREATE TABLE IF NOT EXISTS substitute_requests (
 -- 5. Enable Row Level Security and add policies for substitute_requests
 ALTER TABLE substitute_requests ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies 
-    WHERE tablename = 'substitute_requests' AND policyname = 'substitute_requests_school'
-  ) THEN
-    CREATE POLICY substitute_requests_school ON substitute_requests
-      FOR ALL USING (school_id = public.user_school_id())
-      WITH CHECK (school_id = public.user_school_id());
-  END IF;
-END
-$$;
+-- [Buraya yeni RLS politikasını ekleyebilirsiniz]
+

@@ -154,6 +154,26 @@ export const adminRouter = router({
         });
       }
 
+      // Restrict administrator (admin role) invitations to the founder only
+      if (input.role === "admin") {
+        let callerEmail = "";
+        if (ctx.supabase) {
+          try {
+            const { data: userData } = await ctx.supabase.auth.admin.getUserById(ctx.userId);
+            callerEmail = userData?.user?.email || "";
+          } catch (e) {
+            console.error("Failed to fetch caller email for invitation verification:", e);
+          }
+        }
+
+        if (callerEmail !== "simaalouzi@gmail.com") {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Sadece kurucu (simaalouzi@gmail.com) yeni yönetici davet edebilir.",
+          });
+        }
+      }
+
       // 2. Generate a secure token
       const rawToken = crypto.randomBytes(32).toString("hex");
       const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");

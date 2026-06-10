@@ -65,3 +65,7 @@ $$;
 -- 6. Setup indices
 CREATE INDEX IF NOT EXISTS idx_student_logs_school ON student_logs(school_id);
 CREATE INDEX IF NOT EXISTS idx_progress_reports_school ON progress_reports(school_id);
+
+-- 7. Add password to students table
+ALTER TABLE students ADD COLUMN IF NOT EXISTS password TEXT;
+

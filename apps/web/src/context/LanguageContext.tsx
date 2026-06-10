@@ -16,6 +16,7 @@ export const translations = {
     nav_alerts: "Uyarılar",
     nav_settings: "Ayarlar",
     nav_logout: "Çıkış Yap",
+    nav_messages: "Mesajlar",
     
     // Roles
     role_admin: "Yönetici",
@@ -105,6 +106,7 @@ export const translations = {
     nav_alerts: "Alerts",
     nav_settings: "Settings",
     nav_logout: "Logout",
+    nav_messages: "Messages",
     
     // Roles
     role_admin: "Administrator",

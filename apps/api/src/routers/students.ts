@@ -15,6 +15,7 @@ export const studentsRouter = router({
           schoolId: students.schoolId,
           userId: students.userId,
           fullName: students.fullName,
+          password: students.password,
           parentPhone: students.parentPhone,
           isActive: students.isActive,
           createdAt: students.createdAt,
@@ -33,11 +34,30 @@ export const studentsRouter = router({
         )
         .orderBy(students.fullName);
 
+      // Fetch emails from Supabase auth if client is available
+      const userEmailsMap = new Map<string, string>();
+      if (ctx.supabase) {
+        try {
+          const { data } = await ctx.supabase.auth.admin.listUsers();
+          if (data?.users) {
+            for (const u of data.users) {
+              if (u.id && u.email) {
+                userEmailsMap.set(u.id, u.email);
+              }
+            }
+          }
+        } catch (e) {
+          console.error("Failed to list auth users for student emails:", e);
+        }
+      }
+
       return rows.map((r) => ({
         id: r.id,
         school_id: r.schoolId,
         user_id: r.userId,
         full_name: r.fullName,
+        email: r.userId ? userEmailsMap.get(r.userId) || "E-posta bulunamadı" : "Bağlantısız Hesap",
+        password: r.password || null,
         parent_phone: r.parentPhone,
         is_active: r.isActive,
         class_id: r.classId,
@@ -131,6 +151,7 @@ export const studentsRouter = router({
           fullName: input.full_name,
           parentPhone: input.parent_phone || null,
           userId,
+          password: input.password || null,
           isActive: true,
         })
         .returning();
@@ -222,6 +243,7 @@ export const studentsRouter = router({
           fullName: item.full_name,
           parentPhone: item.parent_phone || null,
           userId,
+          password: item.password || null,
           isActive: true,
         });
       }

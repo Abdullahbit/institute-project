@@ -9,6 +9,7 @@ import { authRouter } from "./auth.js";
 import { hoursRouter } from "./hours.js";
 import { studentsRouter } from "./students.js";
 import { classesRouter } from "./classes.js";
+import { messagesRouter } from "./messages.js";
 
 export const appRouter = router({
   health: healthRouter,
@@ -21,6 +22,7 @@ export const appRouter = router({
   hours: hoursRouter,
   students: studentsRouter,
   classes: classesRouter,
+  messages: messagesRouter,
 });
 
 export type AppRouter = typeof appRouter;

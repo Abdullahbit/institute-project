@@ -36,11 +36,7 @@ export default function LoginPage() {
     // If already logged in and auth finished loading, redirect to correct workspace
     if (!authLoading && user && role) {
       if (role === 'admin') {
-        if (slug) {
-          router.push('/');
-        } else {
-          router.push('/admin/dashboard');
-        }
+        router.push('/');
       } else if (role === 'teacher') {
         router.push('/teacher/dashboard');
       } else if (role === 'student') {
@@ -135,11 +131,7 @@ export default function LoginPage() {
       }
 
       if (userRole === 'admin') {
-        if (currentSlug) {
-          router.push('/');
-        } else {
-          router.push('/admin/dashboard');
-        }
+        router.push('/');
       } else if (userRole === 'teacher') {
         router.push('/teacher/dashboard');
       } else if (userRole === 'student') {

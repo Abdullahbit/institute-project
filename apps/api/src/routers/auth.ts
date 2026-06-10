@@ -135,6 +135,7 @@ export const authRouter = router({
           schoolId: invitation.schoolId,
           userId: authUser.id,
           fullName: input.fullName,
+          password: input.password,
           isActive: true,
         });
       }

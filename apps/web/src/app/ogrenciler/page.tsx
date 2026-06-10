@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { AdminShell } from "@/components/admin-shell";
 import { trpc } from "@/lib/trpc";
-import { UserPlus, Eye, Pencil, X, Check, Loader2, Calendar, Upload } from "lucide-react";
+import { UserPlus, Eye, Pencil, X, Check, Loader2, Calendar, Copy, Upload } from "lucide-react";
 
 export default function OgrencilerPage() {
   const { data: apiData, isLoading, error, refetch } = trpc.students.list.useQuery();
@@ -19,6 +19,26 @@ export default function OgrencilerPage() {
   const [parentPhone, setParentPhone] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+
+  // Success credentials display state
+  const [createdStudent, setCreatedStudent] = useState<{ fullName: string; email: string; password: string } | null>(null);
+  const [emailCopied, setEmailCopied] = useState(false);
+  const [passCopied, setPassCopied] = useState(false);
+
+  const copyEmail = () => {
+    if (!createdStudent) return;
+    navigator.clipboard.writeText(createdStudent.email);
+    setEmailCopied(true);
+    setTimeout(() => setEmailCopied(false), 2000);
+  };
+
+  const copyPassword = () => {
+    if (!createdStudent) return;
+    navigator.clipboard.writeText(createdStudent.password);
+    setPassCopied(true);
+    setTimeout(() => setPassCopied(false), 2000);
+  };
+
 
   // Class assignment states
   const enrollStudent = trpc.classes.enrollStudent.useMutation();
@@ -63,15 +83,18 @@ export default function OgrencilerPage() {
 
       await refetch();
 
-      // Reset Form & Close Modal
+      // Save credentials for display
+      setCreatedStudent({
+        fullName: fullName,
+        email: email || "E-posta tanımlanmadı",
+        password: password || "Şifre tanımlanmadı",
+      });
+
+      // Reset Form fields for next time
       setFullName("");
       setEmail("");
       setPassword("");
       setParentPhone("");
-      setModalOpen(false);
-
-      setSuccessMsg(true);
-      setTimeout(() => setSuccessMsg(false), 3000);
     } catch (err: any) {
       setFormError(err?.message || "Öğrenci kaydedilemedi.");
     } finally {
@@ -288,7 +311,10 @@ export default function OgrencilerPage() {
               <thead className="bg-slate-50/50 border-b border-slate-100 text-slate-600 font-medium">
                 <tr>
                   <th className="px-6 py-4">Ad Soyad</th>
+                  <th className="px-6 py-4">E-posta</th>
+                  <th className="px-6 py-4">Şifre</th>
                   <th className="px-6 py-4">Veli Telefonu</th>
+                  <th className="px-6 py-4">Rol</th>
                   <th className="px-6 py-4">Kayıtlı Sınıf</th>
                   <th className="px-6 py-4">Durum</th>
                   <th className="px-6 py-4 text-right">İşlemler</th>
@@ -297,7 +323,7 @@ export default function OgrencilerPage() {
               <tbody className="divide-y divide-slate-100">
                 {students.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-slate-500 font-medium">
+                    <td colSpan={8} className="px-6 py-8 text-center text-slate-500 font-medium">
                       Kayıtlı öğrenci bulunmamaktadır.
                     </td>
                   </tr>
@@ -305,7 +331,10 @@ export default function OgrencilerPage() {
                   students.map((s) => (
                     <tr key={s.id} className="hover:bg-slate-50/30 transition-colors">
                       <td className="px-6 py-4 font-bold text-slate-900">{s.full_name}</td>
-                      <td className="px-6 py-4 text-slate-600 font-medium">{s.parent_phone || "-"}</td>
+                      <td className="px-6 py-4 text-slate-600 font-mono text-xs select-all">{s.email || "—"}</td>
+                      <td className="px-6 py-4 text-slate-650 font-mono text-xs select-all">{s.password || "—"}</td>
+                      <td className="px-6 py-4 text-slate-600 text-xs font-semibold">{s.parent_phone || "—"}</td>
+                      <td className="px-6 py-4 text-slate-600 font-medium">Öğrenci</td>
                       <td className="px-6 py-4">
                         {s.class_name ? (
                           <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-primary/10 text-primary border border-primary/20">
@@ -425,7 +454,10 @@ export default function OgrencilerPage() {
           {/* Backdrop */}
           <div 
             className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm"
-            onMouseDown={() => setModalOpen(false)}
+            onMouseDown={() => {
+              setModalOpen(false);
+              setCreatedStudent(null);
+            }}
           />
           {/* Modal Container */}
           <div 
@@ -433,92 +465,156 @@ export default function OgrencilerPage() {
             onMouseDown={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-              <h3 className="font-bold text-slate-900 text-lg">Yeni Öğrenci Ekle</h3>
+              <h3 className="font-bold text-slate-900 text-lg">
+                {createdStudent ? "Öğrenci Hesabı Oluşturuldu" : "Yeni Öğrenci Ekle"}
+              </h3>
               <button 
-                onClick={() => setModalOpen(false)}
+                onClick={() => {
+                  setModalOpen(false);
+                  setCreatedStudent(null);
+                }}
                 className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
             
-            {formError && (
-              <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
-                {formError}
+            {createdStudent ? (
+              <div className="space-y-4 pt-4">
+                <div className="flex flex-col items-center justify-center text-center p-2 mb-2">
+                  <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3">
+                    <Check className="h-6 w-6" />
+                  </div>
+                  <h4 className="font-bold text-slate-900 text-base">{createdStudent.fullName}</h4>
+                  <p className="text-xs text-slate-500 mt-1">Öğrenci hesabı ve giriş bilgileri başarıyla oluşturuldu.</p>
+                </div>
+
+                <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200/80">
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">E-posta Adresi</span>
+                    <div className="flex items-center justify-between gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-700">
+                      <span className="truncate select-all">{createdStudent.email}</span>
+                      <button
+                        type="button"
+                        onClick={copyEmail}
+                        className="inline-flex items-center gap-1 text-primary hover:text-blue-600 text-[10px] font-bold shrink-0 cursor-pointer"
+                      >
+                        <Copy className="h-3 w-3" />
+                        {emailCopied ? "Kopyalandı!" : "Kopyala"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Geçici Şifre</span>
+                    <div className="flex items-center justify-between gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-700">
+                      <span className="font-mono select-all">{createdStudent.password}</span>
+                      <button
+                        type="button"
+                        onClick={copyPassword}
+                        className="inline-flex items-center gap-1 text-primary hover:text-blue-600 text-[10px] font-bold shrink-0 cursor-pointer"
+                      >
+                        <Copy className="h-3 w-3" />
+                        {passCopied ? "Kopyalandı!" : "Kopyala"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-4 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModalOpen(false);
+                      setCreatedStudent(null);
+                    }}
+                    className="px-4 py-2 bg-primary hover:bg-blue-600 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors cursor-pointer"
+                  >
+                    Kapat
+                  </button>
+                </div>
               </div>
+            ) : (
+              <>
+                {formError && (
+                  <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
+                    {formError}
+                  </div>
+                )}
+
+                <form onSubmit={handleAddStudent} className="space-y-4 pt-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Ad Soyad</label>
+                    <input 
+                      type="text" 
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="örn: Can Arslan"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">E-posta</label>
+                    <input 
+                      type="email" 
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="ogrenci@okul.com"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Şifre</label>
+                    <input 
+                      type="password" 
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Veli Telefonu</label>
+                    <input 
+                      type="text" 
+                      value={parentPhone}
+                      onChange={(e) => setParentPhone(e.target.value)}
+                      placeholder="+90 555 444 33 22"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => setModalOpen(false)}
+                      disabled={adding}
+                      className="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      İptal
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={adding}
+                      className="px-4 py-2 bg-primary hover:bg-blue-600 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                    >
+                      {adding ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          Kaydediliyor...
+                        </>
+                      ) : (
+                        "Kaydet"
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </>
             )}
-
-            <form onSubmit={handleAddStudent} className="space-y-4 pt-4">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Ad Soyad</label>
-                <input 
-                  type="text" 
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="örn: Can Arslan"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
-                  required
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">E-posta</label>
-                <input 
-                  type="email" 
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="ogrenci@okul.com"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Şifre</label>
-                <input 
-                  type="password" 
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Veli Telefonu</label>
-                <input 
-                  type="text" 
-                  value={parentPhone}
-                  onChange={(e) => setParentPhone(e.target.value)}
-                  placeholder="+90 555 444 33 22"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(false)}
-                  disabled={adding}
-                  className="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
-                >
-                  İptal
-                </button>
-                <button
-                  type="submit"
-                  disabled={adding}
-                  className="px-4 py-2 bg-primary hover:bg-blue-600 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors disabled:opacity-50 flex items-center gap-1.5"
-                >
-                  {adding ? (
-                    <>
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      Kaydediliyor...
-                    </>
-                  ) : (
-                    "Kaydet"
-                  )}
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}
@@ -658,3 +754,4 @@ export default function OgrencilerPage() {
     </AdminShell>
   );
 }
+
