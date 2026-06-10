@@ -207,3 +207,14 @@ export const classrooms = pgTable("classrooms", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// 16. Messages Table
+export const messages = pgTable("messages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  schoolId: uuid("school_id").notNull().references(() => schools.id),
+  senderId: uuid("sender_id").notNull().references(() => profiles.id),
+  receiverId: uuid("receiver_id").notNull().references(() => profiles.id),
+  content: text("content").notNull(),
+  isRead: boolean("is_read").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

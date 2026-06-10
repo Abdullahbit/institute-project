@@ -14,7 +14,8 @@ import {
   Clock,
   Settings,
   LogOut,
-  BookOpen
+  BookOpen,
+  MessageSquare
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
@@ -59,21 +60,25 @@ const adminNavItems = [
   { href: "/ogrenciler", label: "Öğrenciler", translationKey: "nav_students" as const, icon: GraduationCap },
   { href: "/saat-takibi", label: "Saat Takibi", translationKey: "nav_hours" as const, icon: Clock },
   { href: "/uyarilar", label: "Uyarılar", translationKey: "nav_alerts" as const, icon: Bell },
+  { href: "/mesajlar", label: "Mesajlar", translationKey: "nav_messages" as const, icon: MessageSquare },
   { href: "/ayarlar", label: "Ayarlar", translationKey: "nav_settings" as const, icon: Settings },
 ];
 
 const founderNavItems = [
   { href: "/", label: "Ana Sayfa", translationKey: "nav_home" as const, icon: Home },
+  { href: "/mesajlar", label: "Mesajlar", translationKey: "nav_messages" as const, icon: MessageSquare },
   { href: "/ayarlar", label: "Ayarlar", translationKey: "nav_settings" as const, icon: Settings },
 ];
 
 const teacherNavItems = [
   { href: "/teacher/dashboard", label: "Ana Sayfa", translationKey: "nav_home" as const, icon: Home },
   { href: "/teacher/today", label: "Bugünkü Derslerim", translationKey: "nav_program" as const, icon: Calendar },
+  { href: "/teacher/mesajlar", label: "Mesajlar", translationKey: "nav_messages" as const, icon: MessageSquare },
 ];
 
 const studentNavItems = [
   { href: "/student/dashboard", label: "Ana Sayfa", translationKey: "nav_home" as const, icon: Home },
+  { href: "/student/mesajlar", label: "Mesajlar", translationKey: "nav_messages" as const, icon: MessageSquare },
 ];
 
 export function AdminShell({
