@@ -21,9 +21,9 @@ export function createTrpcClient() {
       httpBatchLink({
         url: `${base}/trpc`,
         async headers() {
-          const headers: Record<string, string> = {
-            "x-school-id": schoolId,
-          };
+          let activeSchoolId = schoolId;
+          const headers: Record<string, string> = {};
+
           if (typeof window !== "undefined") {
             try {
               const { supabase } = await import("./supabaseClient");
@@ -31,11 +31,18 @@ export function createTrpcClient() {
               if (session?.user?.id) {
                 headers["x-user-id"] = session.user.id;
                 headers["Authorization"] = `Bearer ${session.access_token}`;
+                
+                const userSchoolId = session.user.user_metadata?.school_id;
+                if (userSchoolId) {
+                  activeSchoolId = userSchoolId;
+                }
               }
             } catch (err) {
               console.error("Error setting tRPC auth headers:", err);
             }
           }
+
+          headers["x-school-id"] = activeSchoolId;
           return headers;
         },
       }),
