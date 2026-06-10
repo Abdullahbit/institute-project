@@ -74,6 +74,25 @@ export const translations = {
     month_9: "Ekim",
     month_10: "Kasım",
     month_11: "Aralık",
+
+    // Login Page
+    login_title: "Giriş Yap",
+    login_portal_title: "Eğitim Yönetim Portalı",
+    login_school_login: "Okul Girişi",
+    login_email: "E-posta Adresi",
+    login_password: "Şifre",
+    login_remember_me: "Beni Hatırla",
+    login_btn: "Giriş Yap",
+    login_btn_loading: "Giriş Yapılıyor...",
+    login_welcome: "Öğrenci Portalına Hoş Geldiniz",
+    login_welcome_desc: "Giriş yapın ve ders programınızı, ders saat raporlarınızı ve karne gelişim grafiklerinizi hemen izlemeye başlayın.",
+    login_footer: "EduPanel © 2026. Tüm hakları saklıdır.",
+    login_error_fields: "Lütfen tüm giriş alanlarını doldurun.",
+    login_error_invalid: "Geçersiz e-posta veya şifre.",
+    login_error_auth_failed: "Kimlik doğrulama başarısız oldu.",
+    login_error_inactive: "Hesabınız şu anda aktif değil. Lütfen yöneticinizle iletişime geçin.",
+    login_error_unauthorized: "Yetkisiz: Bilinmeyen kullanıcı rolü.",
+    login_error_unexpected: "Giriş yapılırken beklenmedik bir hata oluştu.",
   },
   en: {
     // Navigation
@@ -144,6 +163,25 @@ export const translations = {
     month_9: "October",
     month_10: "November",
     month_11: "December",
+
+    // Login Page
+    login_title: "Login",
+    login_portal_title: "Education Management Portal",
+    login_school_login: "School Login",
+    login_email: "Email Address",
+    login_password: "Password",
+    login_remember_me: "Remember Me",
+    login_btn: "Login",
+    login_btn_loading: "Logging In...",
+    login_welcome: "Welcome to Student Portal",
+    login_welcome_desc: "Log in and start tracking your weekly schedule, hour reports, and progress charts right away.",
+    login_footer: "EduPanel © 2026. All rights reserved.",
+    login_error_fields: "Please fill in all entry fields.",
+    login_error_invalid: "Invalid email or password.",
+    login_error_auth_failed: "Authentication failed.",
+    login_error_inactive: "Your account is not active. Please contact your administrator.",
+    login_error_unauthorized: "Unauthorized: Unknown user role.",
+    login_error_unexpected: "An unexpected error occurred during login.",
   }
 };
 

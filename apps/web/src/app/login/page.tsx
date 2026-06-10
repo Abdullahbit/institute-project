@@ -4,18 +4,25 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { getSchoolSlugFromHostname } from '../../utils/slug';
 import { trpc } from '@/lib/trpc';
 import Image from 'next/image';
-import { Mail, Lock, Loader2, Sparkles, ShieldAlert, Check, Globe } from 'lucide-react';
+import { Mail, Lock, Loader2, Sparkles, ShieldAlert, Check, Globe, X } from 'lucide-react';
 
 export default function LoginPage() {
+  const { language, setLanguage, t } = useLanguage();
   const { user, role, loading: authLoading, setLocalSchoolSlug } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [currentSlug, setCurrentSlug] = useState('');
+
+  // Remember me & Autofill states
+  const [rememberMe, setRememberMe] = useState(false);
+  const [savedEmails, setSavedEmails] = useState<string[]>([]);
+  const [showEmailDropdown, setShowEmailDropdown] = useState(false);
   const router = useRouter();
 
   // tRPC Mutation Hooks
@@ -42,10 +49,37 @@ export default function LoginPage() {
     }
   }, [user, role, authLoading, router]);
 
+  useEffect(() => {
+    // Load saved emails
+    const localEmails = localStorage.getItem('edupanel_saved_emails');
+    if (localEmails) {
+      try {
+        setSavedEmails(JSON.parse(localEmails));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // Load remember me settings
+    const savedCreds = localStorage.getItem('edupanel_remembered_credentials');
+    if (savedCreds) {
+      try {
+        const { email: savedEmail, password: savedPassword } = JSON.parse(savedCreds);
+        if (savedEmail && savedPassword) {
+          setEmail(savedEmail);
+          setPassword(savedPassword);
+          setRememberMe(true);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, []);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
-      setError('Lütfen tüm giriş alanlarını doldurun.');
+      setError(t('login_error_fields'));
       return;
     }
 
@@ -59,14 +93,14 @@ export default function LoginPage() {
       });
 
       if (authErr) {
-        setError(authErr.message === 'Invalid login credentials' ? 'Geçersiz e-posta veya şifre.' : authErr.message);
+        setError(authErr.message === 'Invalid login credentials' ? t('login_error_invalid') : authErr.message);
         setLoading(false);
         return;
       }
 
       const u = data.user;
       if (!u) {
-        setError('Kimlik doğrulama başarısız oldu.');
+        setError(t('login_error_auth_failed'));
         setLoading(false);
         return;
       }
@@ -75,12 +109,30 @@ export default function LoginPage() {
       const isActive = u.user_metadata?.is_active ?? true;
       if (!isActive) {
         await supabase.auth.signOut();
-        setError('Hesabınız şu anda aktif değil. Lütfen yöneticinizle iletişime geçin.');
+        setError(t('login_error_inactive'));
         setLoading(false);
         return;
       }
 
       const userRole = u.user_metadata?.role;
+
+      if (userRole === 'admin' || userRole === 'teacher' || userRole === 'student') {
+        if (rememberMe) {
+          localStorage.setItem(
+            'edupanel_remembered_credentials',
+            JSON.stringify({ email, password })
+          );
+        } else {
+          localStorage.removeItem('edupanel_remembered_credentials');
+        }
+
+        let updatedEmails = [email, ...savedEmails.filter((x) => x !== email)];
+        if (updatedEmails.length > 5) {
+          updatedEmails = updatedEmails.slice(0, 5);
+        }
+        setSavedEmails(updatedEmails);
+        localStorage.setItem('edupanel_saved_emails', JSON.stringify(updatedEmails));
+      }
 
       if (userRole === 'admin') {
         if (currentSlug) {
@@ -93,11 +145,11 @@ export default function LoginPage() {
       } else if (userRole === 'student') {
         router.push('/student/dashboard');
       } else {
-        setError('Yetkisiz: Bilinmeyen kullanıcı rolü.');
+        setError(t('login_error_unauthorized'));
         await supabase.auth.signOut();
       }
     } catch (err: any) {
-      setError(err?.message || 'Giriş yapılırken beklenmedik bir hata oluştu.');
+      setError(err?.message || t('login_error_unexpected'));
     } finally {
       setLoading(false);
     }
@@ -121,22 +173,47 @@ export default function LoginPage() {
         <div className="absolute top-1/4 left-1/4 w-72 h-72 rounded-full bg-violet-600/5 blur-[80px] pointer-events-none"></div>
         <div className="absolute bottom-1/4 right-1/4 w-72 h-72 rounded-full bg-indigo-600/5 blur-[80px] pointer-events-none"></div>
 
-        {/* Top Logo branding */}
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-violet-600 to-indigo-600 flex items-center justify-center font-bold text-lg text-white shadow-lg shadow-violet-500/10">
-            EP
+        {/* Top Logo branding & Language Selector */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-violet-600 to-indigo-600 flex items-center justify-center font-bold text-lg text-white shadow-lg shadow-violet-500/10">
+              EP
+            </div>
+            <span className="text-lg font-bold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
+              EduPanel
+            </span>
           </div>
-          <span className="text-lg font-bold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
-            EduPanel
-          </span>
+
+          <div className="flex items-center bg-slate-900/80 border border-slate-800 rounded-lg p-0.5 z-20">
+            <button
+              onClick={() => setLanguage('tr')}
+              className={`px-2.5 py-1 text-[10px] font-bold rounded transition-all cursor-pointer ${
+                language === 'tr'
+                  ? 'bg-violet-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              TR
+            </button>
+            <button
+              onClick={() => setLanguage('en')}
+              className={`px-2.5 py-1 text-[10px] font-bold rounded transition-all cursor-pointer ${
+                language === 'en'
+                  ? 'bg-violet-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              EN
+            </button>
+          </div>
         </div>
 
         {/* Center Login Form */}
         <div className="my-auto py-8 max-w-sm w-full mx-auto">
           <div className="mb-6">
-            <h2 className="text-2xl font-bold tracking-tight text-white mb-1.5">Giriş Yap</h2>
-            <p className="text-xs text-slate-450 font-semibold uppercase tracking-wider">
-              {currentSlug ? `Okul Girişi: ${schoolTitle}` : 'Eğitim Yönetim Portalı'}
+            <h2 className="text-2xl font-bold tracking-tight text-white mb-1.5">{t('login_title')}</h2>
+            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+              {currentSlug ? `${t('login_school_login')}: ${schoolTitle}` : t('login_portal_title')}
             </p>
           </div>
 
@@ -150,7 +227,7 @@ export default function LoginPage() {
           <form onSubmit={handleLogin} className="flex flex-col gap-4">
             <div className="space-y-1">
               <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                E-posta Adresi
+                {t('login_email')}
               </label>
               <div className="relative">
                 <Mail className="absolute left-3.5 top-3.5 h-4.5 w-4.5 text-slate-600" />
@@ -158,16 +235,64 @@ export default function LoginPage() {
                   type="email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
+                  onFocus={() => setShowEmailDropdown(true)}
                   placeholder="name@school.com"
                   className="w-full bg-[#14151F] border border-slate-850 rounded-xl pl-11 pr-4 py-3 text-sm text-white placeholder-slate-650 focus:outline-none focus:border-violet-500 transition-colors font-medium"
                   required
                 />
+                
+                {showEmailDropdown && savedEmails.length > 0 && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-10" 
+                      onClick={() => setShowEmailDropdown(false)}
+                    />
+                    <div className="absolute left-0 right-0 top-full mt-1.5 bg-[#14151F] border border-slate-800 rounded-xl shadow-2xl overflow-hidden z-20 max-h-40 overflow-y-auto">
+                      {savedEmails.map((savedEmail, idx) => (
+                        <div
+                          key={idx}
+                          onClick={() => {
+                            setEmail(savedEmail);
+                            setShowEmailDropdown(false);
+                            const savedCreds = localStorage.getItem('edupanel_remembered_credentials');
+                            if (savedCreds) {
+                              try {
+                                const { email: savedEmailName, password: savedPassword } = JSON.parse(savedCreds);
+                                if (savedEmailName === savedEmail) {
+                                  setPassword(savedPassword);
+                                  setRememberMe(true);
+                                }
+                              } catch (e) {
+                                console.error(e);
+                              }
+                            }
+                          }}
+                          className="px-4 py-2.5 text-xs text-slate-350 hover:text-white hover:bg-violet-600/20 cursor-pointer transition-colors flex justify-between items-center group/item"
+                        >
+                          <span>{savedEmail}</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const updated = savedEmails.filter(x => x !== savedEmail);
+                              setSavedEmails(updated);
+                              localStorage.setItem('edupanel_saved_emails', JSON.stringify(updated));
+                            }}
+                            className="text-slate-500 hover:text-rose-400 p-0.5 rounded opacity-0 group-hover/item:opacity-100 transition-opacity cursor-pointer"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
             <div className="space-y-1">
               <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                Şifre
+                {t('login_password')}
               </label>
               <div className="relative">
                 <Lock className="absolute left-3.5 top-3.5 h-4.5 w-4.5 text-slate-600" />
@@ -182,13 +307,25 @@ export default function LoginPage() {
               </div>
             </div>
 
+            <div className="flex items-center justify-between mt-1">
+              <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="rounded border-slate-800 bg-[#14151F] text-violet-600 focus:ring-violet-500/20 h-4 w-4 transition-colors cursor-pointer"
+                />
+                <span>{t('login_remember_me')}</span>
+              </label>
+            </div>
+
             <button
               type="submit"
               disabled={loading || authLoading}
               className="mt-2 w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-bold py-3.5 px-4 rounded-xl transition-all shadow-lg shadow-violet-500/10 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-1.5"
             >
               {(loading || authLoading) && <Loader2 className="h-4 w-4 animate-spin" />}
-              {loading ? 'Giriş Yapılıyor...' : 'Giriş Yap'}
+              {loading ? t('login_btn_loading') : t('login_btn')}
             </button>
           </form>
         </div>
@@ -196,7 +333,7 @@ export default function LoginPage() {
         {/* Empty space/footer */}
         <div className="pt-6 border-t border-slate-900/10 flex flex-col gap-2 max-w-sm w-full mx-auto">
           <p className="text-[10px] text-center text-slate-600 font-medium">
-            EduPanel © 2026. Tüm hakları saklıdır.
+            {t('login_footer')}
           </p>
         </div>
       </div>
@@ -212,10 +349,10 @@ export default function LoginPage() {
         <div className="max-w-4xl w-full text-center flex flex-col items-center gap-8 z-10 animate-in fade-in zoom-in-95 duration-500">
           <div className="space-y-3">
             <h1 className="text-4xl font-extrabold tracking-tight text-white leading-none">
-              Welcome to student portal
+              {t('login_welcome')}
             </h1>
             <p className="text-sm text-violet-100 max-w-md leading-relaxed font-medium">
-              Giriş yapın ve ders programınızı, ders saat raporlarınızı ve karne gelişim grafiklerinizi hemen izlemeye başlayın.
+              {t('login_welcome_desc')}
             </p>
           </div>
 
