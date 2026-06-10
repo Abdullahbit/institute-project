@@ -4,8 +4,11 @@ import React, { useState, useEffect } from "react";
 import { AdminShell } from "@/components/admin-shell";
 import { Building2, Bell, User, Shield, Check, Loader2, UserPlus, Copy } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/context/AuthContext";
 
 export default function AyarlarPage() {
+  const { user } = useAuth();
+
   // Okul Bilgileri State
   const [schoolName, setSchoolName] = useState("Bright Minds Dil Okulu");
   const [schoolType, setSchoolType] = useState("Dil Okulu");
@@ -16,6 +19,13 @@ export default function AyarlarPage() {
   // Kullanıcı Bilgileri State
   const [userName, setUserName] = useState("Admin Kullanıcı");
   const [userEmail, setUserEmail] = useState("admin@brightminds.edu.tr");
+
+  useEffect(() => {
+    if (user) {
+      setUserName(user.user_metadata?.full_name || localStorage.getItem("userName") || "Admin Kullanıcı");
+      setUserEmail(user.email || localStorage.getItem("userEmail") || "admin@brightminds.edu.tr");
+    }
+  }, [user]);
   const [userPassword, setUserPassword] = useState("");
 
   // Bildirimler State
