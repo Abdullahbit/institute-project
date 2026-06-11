@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { AdminShell } from "@/components/admin-shell";
 import { trpc } from "@/lib/trpc";
-import { UserPlus, Eye, Pencil, X, Check } from "lucide-react";
+import { UserPlus, Eye, EyeOff, Pencil, X, Check, Copy } from "lucide-react";
 
 function getStatusBadge(status: string) {
   switch (status) {
@@ -55,6 +55,7 @@ export default function OgretmenlerPage() {
   const [password, setPassword] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [showPassword, setShowPassword] = useState<Record<string, boolean>>({});
 
   const createTeacher = trpc.teachers.create.useMutation();
   const updateTeacher = trpc.teachers.update.useMutation();
@@ -200,6 +201,8 @@ export default function OgretmenlerPage() {
                 <tr>
                   <th className="px-6 py-4">Ad Soyad</th>
                   <th className="px-6 py-4">Branş</th>
+                  <th className="px-6 py-4">E-posta</th>
+                  <th className="px-6 py-4">Şifre</th>
                   <th className="px-6 py-4 text-center">Aktif Dersler</th>
                   <th className="px-6 py-4 text-center">Aylık Saat</th>
                   <th className="px-6 py-4">Durum</th>
@@ -218,6 +221,34 @@ export default function OgretmenlerPage() {
                     <tr key={t.id} className="hover:bg-slate-50/30 transition-colors">
                       <td className="px-6 py-4 font-bold text-slate-900">{t.full_name}</td>
                       <td className="px-6 py-4 text-slate-600 font-medium">{t.branch}</td>
+                      {/* Email */}
+                      <td className="px-6 py-4">
+                        {t.email ? (
+                          <span className="text-xs font-mono text-slate-700 bg-slate-50 border border-slate-200 px-2 py-1 rounded-md">{t.email}</span>
+                        ) : (
+                          <span className="text-xs text-slate-400 italic">—</span>
+                        )}
+                      </td>
+                      {/* Password */}
+                      <td className="px-6 py-4">
+                        {t.password ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-mono text-slate-700 bg-slate-50 border border-slate-200 px-2 py-1 rounded-md">
+                              {showPassword[t.id] ? t.password : "••••••"}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword((prev) => ({ ...prev, [t.id]: !prev[t.id] }))}
+                              className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
+                              title={showPassword[t.id] ? "Gizle" : "Göster"}
+                            >
+                              {showPassword[t.id] ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400 italic">—</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4 text-center text-slate-700 font-medium">{t.active_class_count}</td>
                       <td className="px-6 py-4 text-center text-slate-700 font-semibold">{t.monthly_hours} saat</td>
                       <td className="px-6 py-4">{getStatusBadge(t.status)}</td>
@@ -291,6 +322,47 @@ export default function OgretmenlerPage() {
                   <span className="font-bold text-slate-500">Branş:</span>
                   <span className="font-semibold text-slate-900">{selectedTeacherDetails?.branch}</span>
                 </div>
+                {selectedTeacherDetails?.email && (
+                  <div className="grid grid-cols-2 gap-2 border-b border-slate-100 pb-2 items-center">
+                    <span className="font-bold text-slate-500">E-posta:</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-xs text-slate-800 bg-slate-50 border border-slate-200 px-2 py-1 rounded-md break-all">{selectedTeacherDetails.email}</span>
+                      <button
+                        type="button"
+                        onClick={() => { navigator.clipboard.writeText(selectedTeacherDetails.email); }}
+                        className="p-1 text-slate-400 hover:text-slate-600"
+                        title="Kopyala"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {selectedTeacherDetails?.password && (
+                  <div className="grid grid-cols-2 gap-2 border-b border-slate-100 pb-2 items-center">
+                    <span className="font-bold text-slate-500">Şifre:</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-xs text-slate-800 bg-amber-50 border border-amber-200 px-2 py-1 rounded-md">
+                        {showPassword[selectedTeacherDetails.id] ? selectedTeacherDetails.password : "••••••"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((prev) => ({ ...prev, [selectedTeacherDetails.id]: !prev[selectedTeacherDetails.id] }))}
+                        className="p-1 text-slate-400 hover:text-slate-600"
+                      >
+                        {showPassword[selectedTeacherDetails.id] ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { navigator.clipboard.writeText(selectedTeacherDetails.password); }}
+                        className="p-1 text-slate-400 hover:text-slate-600"
+                        title="Kopyala"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-2 border-b border-slate-100 pb-2">
                   <span className="font-bold text-slate-500">Aylık Raporlanan Saat:</span>
                   <span className="font-semibold text-slate-900">{selectedTeacherDetails?.monthly_hours} saat</span>
@@ -360,6 +432,7 @@ export default function OgretmenlerPage() {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="ogretmen@okul.com"
+                        autoComplete="new-password"
                         className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
                       />
                     </div>
@@ -371,6 +444,7 @@ export default function OgretmenlerPage() {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="••••••••"
+                        autoComplete="new-password"
                         className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
                       />
                     </div>

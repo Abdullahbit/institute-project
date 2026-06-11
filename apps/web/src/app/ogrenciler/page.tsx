@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { AdminShell } from "@/components/admin-shell";
 import { trpc } from "@/lib/trpc";
-import { UserPlus, Eye, Pencil, X, Check, Loader2, Calendar, Copy, Upload } from "lucide-react";
+import { UserPlus, Eye, Pencil, X, Check, Loader2, Calendar, Copy, Upload, Trash2 } from "lucide-react";
 
 export default function OgrencilerPage() {
   const { data: apiData, isLoading, error, refetch } = trpc.students.list.useQuery();
@@ -51,6 +51,7 @@ export default function OgrencilerPage() {
 
   const createStudent = trpc.students.create.useMutation();
   const bulkCreateStudent = trpc.students.bulkCreate.useMutation();
+  const deleteStudent = trpc.students.delete.useMutation();
 
   // Bulk import states
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
@@ -141,6 +142,16 @@ export default function OgrencilerPage() {
       setClassError(err?.message || "Sınıf ataması gerçekleştirilemedi.");
     } finally {
       setClassSaving(false);
+    }
+  };
+
+  const handleDeleteStudent = async (id: string) => {
+    if (!confirm("Bu öğrenciyi silmek istediğinize emin misiniz?")) return;
+    try {
+      await deleteStudent.mutateAsync({ id });
+      await refetch();
+    } catch (err: any) {
+      alert(err?.message || "Silme işlemi başarısız oldu.");
     }
   };
 
@@ -358,6 +369,13 @@ export default function OgrencilerPage() {
                             <Calendar className="h-3.5 w-3.5 text-slate-400" />
                             Sınıf Atama
                           </button>
+                          <button 
+                            onClick={() => handleDeleteStudent(s.id)}
+                            className="inline-flex items-center gap-1 border border-rose-200 hover:bg-rose-50 text-rose-600 hover:text-rose-700 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-rose-400" />
+                            Sil
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -562,6 +580,7 @@ export default function OgrencilerPage() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="ogrenci@okul.com"
+                      autoComplete="new-password"
                       className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
                     />
                   </div>
@@ -573,6 +592,7 @@ export default function OgrencilerPage() {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••"
+                      autoComplete="new-password"
                       className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
                     />
                   </div>

@@ -78,6 +78,13 @@ function getDayOfWeekIndex(date: Date) {
   return day === 0 ? 6 : day - 1;
 }
 
+function getLocalDateString(date: Date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 export default function ProgramPage() {
   const { language, t } = useLanguage();
   const { data: apiData, isLoading, error, refetch } = trpc.classes.listSlots.useQuery();
@@ -90,6 +97,12 @@ export default function ProgramPage() {
   const [editingSlotId, setEditingSlotId] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Deletion choices states
+  const [deleteChoiceModalOpen, setDeleteChoiceModalOpen] = useState(false);
+  const [lessonToDeleteId, setLessonToDeleteId] = useState<string | null>(null);
+  const [lessonToDeleteDate, setLessonToDeleteDate] = useState<Date | null>(null);
+  const [selectedLessonDate, setSelectedLessonDate] = useState<Date | null>(null);
 
   // Form states for adding/editing lessons
   const [classId, setClassId] = useState("");
@@ -125,14 +138,21 @@ export default function ProgramPage() {
   const selectedDayLessons = useMemo(() => {
     if (!selectedDayDate) return [];
     const dayIndex = getDayOfWeekIndex(selectedDayDate);
-    return filteredLessons.filter((l) => Number(l.day_of_week) === dayIndex)
-      .sort((a, b) => a.start_time.localeCompare(b.start_time));
+    const cellDateStr = getLocalDateString(selectedDayDate);
+    return filteredLessons.filter((l) => {
+      if (Number(l.day_of_week) !== dayIndex) return false;
+      if (l.cancelled_dates && Array.isArray(l.cancelled_dates) && l.cancelled_dates.includes(cellDateStr)) {
+        return false;
+      }
+      return true;
+    }).sort((a, b) => a.start_time.localeCompare(b.start_time));
   }, [selectedDayDate, filteredLessons]);
 
   // Mutations
   const createSlotMutation = trpc.classes.createSlot.useMutation();
   const updateSlotMutation = trpc.classes.updateSlot.useMutation();
   const deleteSlotMutation = trpc.classes.deleteSlot.useMutation();
+  const cancelSlotForDateMutation = trpc.classes.cancelSlotForDate.useMutation();
   const createClassroomMutation = trpc.classes.createClassroom.useMutation();
   const updateClassroomMutation = trpc.classes.updateClassroom.useMutation();
   const deleteClassroomMutation = trpc.classes.deleteClassroom.useMutation();
@@ -234,6 +254,7 @@ export default function ProgramPage() {
     setDayOfWeek(0);
     setStartTime("09:00");
     setEndTime("09:50");
+    setSelectedLessonDate(null);
     setErrorMsg(null);
     setModalOpen(true);
   };
@@ -246,11 +267,12 @@ export default function ProgramPage() {
     setDayOfWeek(getDayOfWeekIndex(date));
     setStartTime("09:00");
     setEndTime("09:50");
+    setSelectedLessonDate(date);
     setErrorMsg(null);
     setModalOpen(true);
   };
 
-  const handleOpenEditModal = (lesson: any) => {
+  const handleOpenEditModal = (lesson: any, date?: Date | null) => {
     setEditingSlotId(lesson.id);
     setClassId(lesson.class_id);
     setTeacherId(lesson.teacher_id);
@@ -259,6 +281,9 @@ export default function ProgramPage() {
     setStartTime(lesson.start_time);
     setEndTime(lesson.end_time);
     setErrorMsg(null);
+    if (date !== undefined) {
+      setSelectedLessonDate(date);
+    }
     setModalOpen(true);
   };
 
@@ -303,32 +328,52 @@ export default function ProgramPage() {
     }
   };
 
-  const handleDeleteLessonFromModal = async () => {
+  const handleDeleteLessonFromModal = () => {
     if (!editingSlotId) return;
-    if (!confirm("Bu dersi programdan silmek istediğinize emin misiniz?")) return;
+    setModalOpen(false);
+    setLessonToDeleteId(editingSlotId);
+    setLessonToDeleteDate(selectedLessonDate);
+    setDeleteChoiceModalOpen(true);
+  };
 
+  const handleDeleteLesson = (lessonId: string, date: Date | null) => {
+    setLessonToDeleteId(lessonId);
+    setLessonToDeleteDate(date);
+    setDeleteChoiceModalOpen(true);
+  };
+
+  const handleConfirmDeleteOnlyToday = async () => {
+    if (!lessonToDeleteId || !lessonToDeleteDate) return;
+    
     setErrorMsg(null);
-
     try {
-      await deleteSlotMutation.mutateAsync({ id: editingSlotId });
-      setSuccessMsg("Ders programdan silindi.");
+      const dateStr = getLocalDateString(lessonToDeleteDate);
+      await cancelSlotForDateMutation.mutateAsync({
+        id: lessonToDeleteId,
+        date: dateStr,
+      });
+      setSuccessMsg(language === "tr" ? "Ders bu tarih için iptal edildi." : "Lesson cancelled for this date.");
       refetch();
-      setModalOpen(false);
+      setDeleteChoiceModalOpen(false);
+      setLessonToDeleteId(null);
+      setLessonToDeleteDate(null);
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err: any) {
-      setErrorMsg(err?.message || "Silme işlemi başarısız oldu.");
+      setErrorMsg(err?.message || "İşlem başarısız oldu.");
     }
   };
 
-  const handleDeleteLesson = async (lessonId: string) => {
-    if (!confirm("Bu dersi programdan silmek istediğinize emin misiniz?")) return;
+  const handleConfirmDeleteAllWeeks = async () => {
+    if (!lessonToDeleteId) return;
 
     setErrorMsg(null);
-
     try {
-      await deleteSlotMutation.mutateAsync({ id: lessonId });
-      setSuccessMsg("Ders programdan silindi.");
+      await deleteSlotMutation.mutateAsync({ id: lessonToDeleteId });
+      setSuccessMsg(language === "tr" ? "Ders tüm haftalardan silindi." : "Lesson deleted from all weeks.");
       refetch();
+      setDeleteChoiceModalOpen(false);
+      setLessonToDeleteId(null);
+      setLessonToDeleteDate(null);
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err: any) {
       setErrorMsg(err?.message || "Silme işlemi başarısız oldu.");
@@ -495,8 +540,15 @@ export default function ProgramPage() {
               const cellDayOfWeek = getDayOfWeekIndex(cell.date);
               const isToday = cell.date.toDateString() === todayStr;
               
-              // Filter lessons matching this day of the week
-              const cellLessons = filteredLessons.filter((l) => Number(l.day_of_week) === cellDayOfWeek);
+              const cellDateStr = getLocalDateString(cell.date);
+              // Filter lessons matching this day of the week, and NOT cancelled for this specific date
+              const cellLessons = filteredLessons.filter((l) => {
+                if (Number(l.day_of_week) !== cellDayOfWeek) return false;
+                if (l.cancelled_dates && Array.isArray(l.cancelled_dates) && l.cancelled_dates.includes(cellDateStr)) {
+                  return false;
+                }
+                return true;
+              });
               // Sort lessons chronologically
               const sortedLessons = [...cellLessons].sort((a, b) => a.start_time.localeCompare(b.start_time));
 
@@ -543,7 +595,7 @@ export default function ProgramPage() {
                             key={lesson.id}
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleOpenEditModal(lesson);
+                              handleOpenEditModal(lesson, cell.date);
                             }}
                             className={`${theme.bg} border-l-2 ${theme.border} border border-slate-200/60 dark:border-slate-800/20 rounded-md p-1.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 cursor-pointer relative group/lesson`}
                             title={language === "tr" ? "Dersi Düzenle / Sil" : "Edit / Delete Lesson"}
@@ -560,7 +612,7 @@ export default function ProgramPage() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleDeleteLesson(lesson.id);
+                                handleDeleteLesson(lesson.id, cell.date);
                               }}
                               className="absolute top-1 right-1 p-0.5 rounded bg-white/95 dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-rose-500 hover:text-rose-600 border border-slate-200/50 dark:border-slate-700/50 shadow-sm opacity-0 group-hover/lesson:opacity-100 transition-opacity duration-200 cursor-pointer"
                               title={language === "tr" ? "Dersi Sil" : "Delete Lesson"}
@@ -836,7 +888,7 @@ export default function ProgramPage() {
                           type="button"
                           onClick={() => {
                             setDayDetailsModalOpen(false);
-                            handleOpenEditModal(lesson);
+                            handleOpenEditModal(lesson, selectedDayDate);
                           }}
                           className="px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/10 rounded-lg transition-all border border-primary/20 bg-white/80 dark:bg-slate-800/80 cursor-pointer"
                         >
@@ -845,9 +897,10 @@ export default function ProgramPage() {
                         <button
                           type="button"
                           onClick={() => {
-                            handleDeleteLesson(lesson.id);
+                            setDayDetailsModalOpen(false);
+                            handleDeleteLesson(lesson.id, selectedDayDate);
                           }}
-                          className="px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-lg transition-all border border-rose-200 dark:border-rose-900/40 bg-white/80 dark:bg-slate-800/80 cursor-pointer"
+                          className="px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-955/20 rounded-lg transition-all border border-rose-200 dark:border-rose-900/40 bg-white/80 dark:bg-slate-800/80 cursor-pointer"
                         >
                           {language === "tr" ? "Sil" : "Delete"}
                         </button>
@@ -877,6 +930,117 @@ export default function ProgramPage() {
               >
                 <Plus className="h-4 w-4" />
                 {language === "tr" ? "Yeni Ders Ekle" : "Add Lesson"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Ders Silme Tercihi Modalı (Delete Choice Modal) */}
+      {deleteChoiceModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in">
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+            onClick={() => setDeleteChoiceModalOpen(false)}
+          />
+          {/* Modal Container */}
+          <div className="relative bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md p-6 shadow-2xl border border-slate-200 dark:border-slate-805 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="font-extrabold text-slate-900 dark:text-white text-lg flex items-center gap-2">
+                <Trash2 className="h-5 w-5 text-rose-500" />
+                {language === "tr" ? "Dersi Sil" : "Delete Lesson"}
+              </h3>
+              <button 
+                onClick={() => setDeleteChoiceModalOpen(false)}
+                className="text-slate-400 hover:text-slate-605 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="py-4 space-y-4">
+              <p className="text-sm text-slate-650 dark:text-slate-300 font-medium">
+                {language === "tr" 
+                  ? "Bu dersi nasıl silmek istersiniz? Lütfen bir seçenek belirleyin:" 
+                  : "How would you like to delete this lesson? Please choose an option:"}
+              </p>
+
+              {lessonToDeleteDate && (
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center gap-3">
+                  <CalendarIcon className="h-5 w-5 text-primary" />
+                  <div className="text-xs">
+                    <span className="font-semibold text-slate-500 dark:text-slate-400 block uppercase tracking-wider scale-90 origin-left">
+                      {language === "tr" ? "Seçilen Tarih" : "Selected Date"}
+                    </span>
+                    <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">
+                      {lessonToDeleteDate.toLocaleDateString(language === "tr" ? "tr-TR" : "en-US", {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={handleConfirmDeleteOnlyToday}
+                  disabled={cancelSlotForDateMutation.isPending}
+                  className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-955/20 dark:to-indigo-955/20 hover:from-blue-100/70 hover:to-indigo-100/70 dark:hover:from-blue-955/40 dark:hover:to-indigo-955/40 border border-blue-200 dark:border-blue-900/50 hover:border-blue-300 dark:hover:border-blue-800/80 rounded-xl transition-all duration-200 text-left group cursor-pointer"
+                >
+                  <div className="flex-1">
+                    <span className="font-extrabold text-blue-905 dark:text-blue-200 text-sm block">
+                      {language === "tr" ? "Sadece Bu Gün İçin İptal Et" : "Cancel Only for Today"}
+                    </span>
+                    <span className="text-xs text-blue-700/85 dark:text-blue-300/75 mt-0.5 block font-medium">
+                      {language === "tr" 
+                        ? "Ders sadece seçilen bu tarihte takvimden kaldırılır." 
+                        : "The lesson is cancelled only on this specific date."}
+                    </span>
+                  </div>
+                  {cancelSlotForDateMutation.isPending ? (
+                    <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />
+                  ) : (
+                    <ChevronRight className="h-5 w-5 text-blue-400 group-hover:translate-x-0.5 transition-transform" />
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleConfirmDeleteAllWeeks}
+                  disabled={deleteSlotMutation.isPending}
+                  className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-rose-50 to-red-50 dark:from-rose-955/10 dark:to-red-955/10 hover:from-rose-100/60 hover:to-red-100/60 dark:hover:from-rose-955/20 dark:hover:to-red-955/20 border border-rose-200 dark:border-rose-900/40 hover:border-rose-300 dark:hover:border-rose-800/60 rounded-xl transition-all duration-200 text-left group cursor-pointer"
+                >
+                  <div className="flex-1">
+                    <span className="font-extrabold text-rose-905 dark:text-rose-200 text-sm block">
+                      {language === "tr" ? "Haftalık Programdan Tamamen Kaldır" : "Delete from All Weeks"}
+                    </span>
+                    <span className="text-xs text-rose-705/85 dark:text-rose-300/75 mt-0.5 block font-medium">
+                      {language === "tr" 
+                        ? "Ders, bu güne ait tüm haftalardan kalıcı olarak silinir." 
+                        : "Completely removes the recurring lesson from all weeks."}
+                    </span>
+                  </div>
+                  {deleteSlotMutation.isPending ? (
+                    <Loader2 className="h-5 w-5 text-rose-500 animate-spin" />
+                  ) : (
+                    <ChevronRight className="h-5 w-5 text-rose-400 group-hover:translate-x-0.5 transition-transform" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-3 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setDeleteChoiceModalOpen(false)}
+                className="px-4.5 py-2 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-805 text-xs font-bold rounded-lg transition-colors cursor-pointer"
+              >
+                {language === "tr" ? "Vazgeç" : "Cancel"}
               </button>
             </div>
           </div>

@@ -8,6 +8,8 @@ export const teacherSchema = z.object({
   school_id: uuidSchema,
   user_id: uuidSchema.nullable(),
   full_name: z.string().min(1),
+  email: z.string().nullable().optional(),
+  password: z.string().nullable().optional(),
   branch: z.string().min(1),
   status: teacherStatusSchema,
   active_class_count: z.number().int().nonnegative(),

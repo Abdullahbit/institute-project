@@ -3,7 +3,7 @@ import { logAttendanceInputSchema, submitProgressReportInputSchema } from "@inst
 import { TRPCError } from "@trpc/server";
 import { db } from "@workspace/db";
 import { studentLogs, progressReports, lessonSessions, students, profiles, classEnrollments, classes, scheduleSlots, teachers } from "@workspace/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { z } from "zod";
 
 export const studentsRouter = router({
@@ -103,6 +103,19 @@ export const studentsRouter = router({
           const { data: listData } = await ctx.supabase.auth.admin.listUsers();
           const existingUser = listData?.users?.find((u: any) => u.email === input.email);
           if (existingUser) {
+            // Check if profile exists and belongs to a different school to prevent cross-tenant collision
+            const [existingProfile] = await db
+              .select()
+              .from(profiles)
+              .where(eq(profiles.id, existingUser.id))
+              .limit(1);
+
+            if (existingProfile && existingProfile.schoolId !== ctx.schoolId) {
+              throw new TRPCError({
+                code: "CONFLICT",
+                message: "Bu e-posta adresi başka bir okulda zaten kayıtlı.",
+              });
+            }
             userId = existingUser.id;
           } else if (input.password) {
             const { data: createData, error: createError } = await ctx.supabase.auth.admin.createUser({
@@ -294,20 +307,33 @@ export const studentsRouter = router({
         });
       }
 
-      // 2. Perform bulk insert for roster
+      const roundNumber = (input as any).round_number ?? 1;
+
+      // 2. Perform bulk upsert for roster (upsert handles re-submitting the same round)
       const values = input.roster.map((row) => ({
         schoolId: ctx.schoolId,
         lessonSessionId: input.session_id,
         studentId: row.student_id,
         status: row.status,
+        roundNumber,
         notes: row.notes || null,
       }));
 
       if (values.length > 0) {
-        await db.insert(studentLogs).values(values);
+        await db
+          .insert(studentLogs)
+          .values(values)
+          .onConflictDoUpdate({
+            target: [studentLogs.lessonSessionId, studentLogs.studentId, studentLogs.roundNumber],
+            set: {
+              status: sql`excluded.status`,
+              notes: sql`excluded.notes`,
+              updatedAt: new Date(),
+            },
+          });
       }
 
-      // 3. Calculate count of students marked present/late
+      // 3. Calculate count of students marked present/late (across all rounds, latest per student)
       const presentCount = input.roster.filter((r) => r.status === "present" || r.status === "late").length;
 
       // 4. Update studentCount in lessonSessions
@@ -319,7 +345,68 @@ export const studentsRouter = router({
         })
         .where(eq(lessonSessions.id, input.session_id));
 
-      return { success: true, presentCount };
+      return { success: true, presentCount, roundNumber };
+    }),
+
+  getAttendanceLogs: schoolProcedure
+    .input(z.object({
+      class_id: z.string().uuid().optional(),
+      session_date: z.string().optional(), // 'YYYY-MM-DD'
+      round_number: z.number().int().min(1).max(4).optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      // Join student_logs → lesson_sessions → schedule_slots → classes → students
+      const rows = await db
+        .select({
+          log_id: studentLogs.id,
+          student_id: studentLogs.studentId,
+          student_name: students.fullName,
+          status: studentLogs.status,
+          round_number: studentLogs.roundNumber,
+          notes: studentLogs.notes,
+          session_id: lessonSessions.id,
+          session_date: lessonSessions.sessionDate,
+          class_id: scheduleSlots.classId,
+          class_name: classes.name,
+          level_code: classes.levelCode,
+          logged_at: studentLogs.createdAt,
+        })
+        .from(studentLogs)
+        .innerJoin(lessonSessions, eq(studentLogs.lessonSessionId, lessonSessions.id))
+        .innerJoin(scheduleSlots, eq(lessonSessions.scheduleSlotId, scheduleSlots.id))
+        .innerJoin(classes, eq(scheduleSlots.classId, classes.id))
+        .innerJoin(students, eq(studentLogs.studentId, students.id))
+        .where(
+          and(
+            eq(lessonSessions.schoolId, ctx.schoolId),
+            eq(studentLogs.isActive, true),
+            input.class_id ? eq(scheduleSlots.classId, input.class_id) : undefined,
+            input.session_date ? eq(lessonSessions.sessionDate, input.session_date) : undefined,
+            input.round_number ? eq(studentLogs.roundNumber, input.round_number) : undefined,
+          )
+        )
+        .orderBy(desc(lessonSessions.sessionDate), studentLogs.roundNumber, students.fullName);
+
+      return rows;
+    }),
+
+  getSessionRounds: schoolProcedure
+    .input(z.object({ session_id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      // Returns which rounds (1-4) have already been submitted for a session
+      const rows = await db
+        .selectDistinct({ round_number: studentLogs.roundNumber })
+        .from(studentLogs)
+        .where(
+          and(
+            eq(studentLogs.lessonSessionId, input.session_id),
+            eq(studentLogs.schoolId, ctx.schoolId),
+            eq(studentLogs.isActive, true)
+          )
+        )
+        .orderBy(studentLogs.roundNumber);
+
+      return rows.map((r) => r.round_number);
     }),
 
   submitProgressReport: subscribedProcedure
@@ -583,4 +670,82 @@ export const studentsRouter = router({
         teacher_name: r.teacherName,
       }));
     }),
+
+  delete: subscribedProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.userId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Authentication required",
+        });
+      }
+
+      // Admin check
+      const [caller] = await db
+        .select()
+        .from(profiles)
+        .where(eq(profiles.id, ctx.userId))
+        .limit(1);
+
+      if (!caller || caller.role !== "admin") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only administrators can delete student profiles",
+        });
+      }
+
+      // Get the student to find their userId
+      const [student] = await db
+        .select()
+        .from(students)
+        .where(
+          and(
+            eq(students.id, input.id),
+            eq(students.schoolId, ctx.schoolId)
+          )
+        )
+        .limit(1);
+
+      if (!student) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Student not found",
+        });
+      }
+
+      // Perform soft delete in a transaction
+      await db.transaction(async (tx) => {
+        // Soft delete student
+        await tx
+          .update(students)
+          .set({
+            isActive: false,
+            updatedAt: new Date(),
+          })
+          .where(eq(students.id, input.id));
+
+        // If they have a userId, soft delete their profile
+        if (student.userId) {
+          await tx
+            .update(profiles)
+            .set({
+              isActive: false,
+              updatedAt: new Date(),
+            })
+            .where(eq(profiles.id, student.userId));
+        }
+
+        // Deactivate all their class enrollments
+        await tx
+          .update(classEnrollments)
+          .set({
+            isActive: false,
+          })
+          .where(eq(classEnrollments.studentId, input.id));
+      });
+
+      return { success: true };
+    }),
 });
+

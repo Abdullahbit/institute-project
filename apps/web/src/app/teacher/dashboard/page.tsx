@@ -145,6 +145,7 @@ export default function TeacherDashboard() {
   const [activeHourTab, setActiveHourTab] = useState<"all" | "pending" | "approved">("all");
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
   const [viewingAuditLog, setViewingAuditLog] = useState<any | null>(null);
+  const [selectedDay, setSelectedDay] = useState<{ date: Date; lessons: any[] } | null>(null);
 
   // Protect route
   useEffect(() => {
@@ -475,11 +476,16 @@ export default function TeacherDashboard() {
                     return (
                       <div
                         key={idx}
+                        onClick={() => {
+                          if (sortedLessons.length > 0) {
+                            setSelectedDay({ date: cell.date, lessons: sortedLessons });
+                          }
+                        }}
                         className={`min-h-[70px] p-1 border-r border-b border-slate-200 dark:border-slate-800 flex flex-col justify-between transition-all relative ${
                           cell.isCurrentMonth
                             ? "bg-white dark:bg-slate-900"
                             : "bg-slate-50/20 dark:bg-slate-950/10 text-slate-400 dark:text-slate-600"
-                        } ${isToday ? "ring-1 ring-primary ring-inset bg-blue-50/5" : ""}`}
+                        } ${isToday ? "ring-1 ring-primary ring-inset bg-blue-50/5" : ""} ${sortedLessons.length > 0 ? "cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50" : ""}`}
                       >
                         <div className="flex justify-between items-center">
                           <span className={`text-[10px] font-bold h-4 w-4 flex items-center justify-center rounded-full ${
@@ -493,14 +499,14 @@ export default function TeacherDashboard() {
                           </span>
                         </div>
 
-                        <div className="space-y-0.5 mt-1">
+                        <div className="space-y-0.5 mt-1 pointer-events-none">
                           {sortedLessons.map((lesson) => (
                             <div
                               key={lesson.id}
-                              className="text-[8px] font-bold px-1 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 flex flex-col gap-0.25"
+                              className="text-[8px] font-bold px-1 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 flex flex-col gap-0.25 text-left transition-colors w-full"
                               title={`${lesson.class_name} (${lesson.start_time} - ${lesson.end_time} @ ${lesson.room_name})`}
                             >
-                              <div className="truncate font-extrabold">{lesson.class_name}</div>
+                              <div className="truncate font-extrabold w-full">{lesson.class_name}</div>
                               <div className="text-[7px] font-medium opacity-90">{lesson.start_time}-{lesson.end_time}</div>
                             </div>
                           ))}
@@ -722,6 +728,68 @@ export default function TeacherDashboard() {
               <button
                 onClick={() => setViewingAuditLog(null)}
                 className="px-4 py-2 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 transition-colors shadow-sm"
+              >
+                Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Günlük Dersler Modalı */}
+      {selectedDay && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-2xl w-full max-w-lg overflow-hidden relative flex flex-col max-h-[85vh]" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-start p-6 pb-4 border-b border-slate-100 shrink-0">
+              <div>
+                <h3 className="font-bold text-slate-900 text-lg">
+                  {selectedDay.date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' })}
+                </h3>
+                <p className="text-sm text-slate-500 mt-0.5">Bugüne ait ders programı detayları</p>
+              </div>
+              <button 
+                onClick={() => setSelectedDay(null)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto space-y-3 bg-slate-50">
+              {selectedDay.lessons.map((lesson, index) => (
+                <div key={lesson.id || index} className="bg-slate-50 border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
+                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary"></div>
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-primary"></div>
+                      <h4 className="font-bold text-slate-800 text-base">{lesson.class_name}</h4>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-y-3 gap-x-4">
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <Clock className="h-4 w-4 text-slate-400 shrink-0" />
+                      <span className="text-sm font-medium">{lesson.start_time} - {lesson.end_time}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <MapPin className="h-4 w-4 text-slate-400 shrink-0" />
+                      <span className="text-sm font-medium">{lesson.room_name || 'Belirtilmemiş'}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-600 col-span-2">
+                      <div className="h-4 w-4 rounded-full bg-slate-200 flex items-center justify-center shrink-0">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-500"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                      </div>
+                      <span className="text-sm font-medium">{activeTeacher?.full_name || 'Eğitmen'}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="p-4 border-t border-slate-100 bg-white flex justify-end shrink-0">
+              <button 
+                onClick={() => setSelectedDay(null)}
+                className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 text-sm font-bold rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
               >
                 Kapat
               </button>

@@ -26,6 +26,11 @@ export function createTrpcClient() {
 
           if (typeof window !== "undefined") {
             try {
+              const storedSchoolId = localStorage.getItem("x-school-id");
+              if (storedSchoolId) {
+                activeSchoolId = storedSchoolId;
+              }
+
               const { supabase } = await import("./supabaseClient");
               const { data: { session } } = await supabase.auth.getSession();
               if (session?.user?.id) {
@@ -35,6 +40,7 @@ export function createTrpcClient() {
                 const userSchoolId = session.user.user_metadata?.school_id;
                 if (userSchoolId) {
                   activeSchoolId = userSchoolId;
+                  localStorage.setItem("x-school-id", userSchoolId);
                 }
               }
             } catch (err) {
