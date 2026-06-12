@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { AdminShell } from "@/components/admin-shell";
 import { trpc } from "@/lib/trpc";
 import { Plus, Pencil, Trash2, Users, X, Check, Loader2, UserPlus, BookOpen } from "lucide-react";
@@ -260,13 +261,22 @@ export default function SiniflarPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-center">
-                        <button
-                          onClick={() => handleOpenRosterModal(cls)}
-                          className="inline-flex items-center gap-1.5 text-xs text-primary hover:text-blue-700 font-bold border border-primary/20 hover:bg-primary/5 px-3 py-1.5 rounded-lg transition-all"
-                        >
-                          <Users className="h-3.5 w-3.5 text-primary" />
-                          Listeyi Yönet
-                        </button>
+                        <div className="flex flex-col gap-1.5 items-center justify-center">
+                          <button
+                            onClick={() => handleOpenRosterModal(cls)}
+                            className="inline-flex items-center gap-1.5 text-xs text-primary hover:text-blue-700 font-bold border border-primary/20 hover:bg-primary/5 px-3 py-1.5 rounded-lg transition-all cursor-pointer w-full max-w-[120px] justify-center"
+                          >
+                            <Users className="h-3.5 w-3.5 text-primary" />
+                            Listeyi Yönet
+                          </button>
+                          <Link
+                            href={`/siniflar/${cls.id}`}
+                            className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-800 font-bold border border-slate-200 hover:bg-slate-50 px-3 py-1 rounded-lg transition-all cursor-pointer w-full max-w-[120px] justify-center"
+                          >
+                            <BookOpen className="h-3.5 w-3.5 text-slate-500" />
+                            Deftere Git
+                          </Link>
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">

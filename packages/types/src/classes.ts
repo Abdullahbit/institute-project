@@ -43,3 +43,15 @@ export const enrollStudentInputSchema = z.object({
   student_id: uuidSchema,
 });
 
+export const updateSessionLogInputSchema = z.object({
+  description: z.string().min(1, { message: "Ders içeriği açıklaması zorunludur" }),
+  homework: z.string().optional(),
+  hours_taught: z.number().int().min(1, { message: "Ders saati en az 1 olmalıdır" }),
+});
+
+export const saveTermReportInputSchema = z.object({
+  class_id: uuidSchema,
+  student_id: uuidSchema,
+  notes: z.string().min(1, { message: "Öğretmen notu boş bırakılamaz" }),
+});
+

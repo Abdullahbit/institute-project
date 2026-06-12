@@ -167,6 +167,21 @@ export default function TeacherDashboard() {
     { enabled: !!activeTeacher?.id }
   );
 
+  // Fetch missing logs count
+  const { data: missingLogsData } = trpc.classes.getTeacherMissingLogsCount.useQuery(
+    { teacher_id: activeTeacher?.id || "" },
+    { enabled: !!activeTeacher?.id }
+  );
+
+  const myClasses = useMemo(() => {
+    if (!slots) return [];
+    const unique = new Map<string, { id: string; name: string }>();
+    slots.forEach((s) => {
+      unique.set(s.class_id, { id: s.class_id, name: s.class_name });
+    });
+    return Array.from(unique.values());
+  }, [slots]);
+
   // Generate actual lesson occurrences for the visible calendar cells
   const actualOccurrences = useMemo(() => {
     if (!slots || slots.length === 0 || calendarCells.length === 0) return [];
@@ -347,6 +362,23 @@ export default function TeacherDashboard() {
             Eğitmen portalınız aktif durumdadır. Buradan ders programınızı takip edebilir, derslerinize giriş/çıkış (check-in/out) işlemlerini yapabilir ve ders saatlerinizi raporlayabilirsiniz.
           </p>
         </div>
+
+        {/* Missing Logs Warning Banner */}
+        {missingLogsData && missingLogsData.count > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3 animate-fade-in shadow-sm">
+            <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <h4 className="text-xs font-bold text-amber-800 uppercase tracking-wider">
+                {language === "tr" ? "Eksik Ders Defteri Kayıtları Var" : "Missing Lesson Logs"}
+              </h4>
+              <p className="text-xs text-amber-700 mt-1 leading-relaxed">
+                {language === "tr" 
+                  ? `Tamamladığınız ${missingLogsData.count} ders seansının defter kaydı doldurulmamış. Lütfen en kısa sürede ders içeriklerini doldurun.`
+                  : `You have ${missingLogsData.count} completed lesson sessions with missing defter logs. Please fill them as soon as possible.`}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Substitute Requests */}
         {openSubstitutes && openSubstitutes.length > 0 && (
@@ -601,8 +633,11 @@ export default function TeacherDashboard() {
           </div>
 
 
-          {/* Sağ Kolon: Saat Raporlama */}
-          <div className="lg:col-span-6 bg-white border border-slate-200/80 rounded-xl p-6 shadow-sm flex flex-col gap-4">
+          {/* Sağ Kolon */}
+          <div className="lg:col-span-6 flex flex-col gap-6">
+
+            {/* Saat Raporlama */}
+            <div className="bg-white border border-slate-200/80 rounded-xl p-6 shadow-sm flex flex-col gap-4">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <h3 className="font-bold text-slate-800 flex items-center gap-2">
                 <FileText className="h-5 w-5 text-primary" />
@@ -742,9 +777,50 @@ export default function TeacherDashboard() {
             )}
           </div>
 
+          {/* Sınıflarım & Sınıf Defterleri */}
+          <div className="bg-white border border-slate-200/80 rounded-xl p-6 shadow-sm flex flex-col gap-4">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                <BookOpen className="h-5 w-5 text-primary" />
+                {language === "tr" ? "Sınıf Defterlerim" : "My Class Registers"}
+              </h3>
+            </div>
+
+            {loadingSlots ? (
+              <div className="flex flex-col items-center justify-center py-8 gap-2 text-slate-400">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                <span className="text-xs">{language === "tr" ? "Sınıflar yükleniyor..." : "Loading classes..."}</span>
+              </div>
+            ) : myClasses.length === 0 ? (
+              <div className="text-center py-8 text-slate-400 text-xs italic font-medium">
+                {language === "tr" ? "Aktif sınıfınız bulunmamaktadır." : "No active classes assigned."}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-2.5">
+                {myClasses.map((c) => (
+                  <div 
+                    key={c.id} 
+                    className="flex items-center justify-between p-3.5 bg-slate-50 hover:bg-slate-100/70 border border-slate-200/60 hover:border-slate-300 rounded-xl transition-all"
+                  >
+                    <span className="font-bold text-slate-800 text-xs">{c.name}</span>
+                    <Link
+                      href={`/teacher/siniflar/${c.id}`}
+                      className="inline-flex items-center gap-1.5 text-xs text-primary hover:text-blue-700 font-bold border border-primary/20 hover:bg-primary/5 px-3 py-1.5 rounded-lg transition-all cursor-pointer"
+                    >
+                      <BookOpen className="h-3.5 w-3.5 text-primary" />
+                      {language === "tr" ? "Defteri Aç" : "Open Register"}
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
         </div>
 
       </div>
+
+    </div>
 
       {/* Rapor Detayı & Geçmişi Modalı */}
       {viewingAuditLog && (
@@ -862,6 +938,17 @@ export default function TeacherDashboard() {
                       </div>
                       <span className="text-sm font-medium">{activeTeacher?.full_name || 'Eğitmen'}</span>
                     </div>
+                  </div>
+                  
+                  <div className="mt-3 pt-3 border-t border-slate-200/65 flex justify-between items-center">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">{language === "tr" ? "Defter Kaydı" : "Register Log"}</span>
+                    <Link
+                      href={`/teacher/siniflar/${lesson.class_id}`}
+                      className="inline-flex items-center gap-1 text-[10px] text-primary hover:text-blue-750 font-bold border border-primary/20 hover:bg-primary/5 px-2.5 py-1.5 rounded transition-colors cursor-pointer"
+                    >
+                      <BookOpen className="h-3 w-3" />
+                      {language === "tr" ? "Sınıf Defterine Git" : "Go to Register"}
+                    </Link>
                   </div>
                 </div>
               ))}

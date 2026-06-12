@@ -109,6 +109,9 @@ export const lessonSessions = pgTable("lesson_sessions", {
   checkinAt: timestamp("checkin_at", { withTimezone: true }),
   checkoutAt: timestamp("checkout_at", { withTimezone: true }),
   teacherId: uuid("teacher_id").references(() => teachers.id), // Reassigned teacher if substituted
+  description: text("description"),
+  homework: text("homework"),
+  hoursTaught: integer("hours_taught"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -223,4 +226,16 @@ export const messages = pgTable("messages", {
   content: text("content").notNull(),
   isRead: boolean("is_read").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// 17. Student Term Reports Table
+export const studentTermReports = pgTable("student_term_reports", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  schoolId: uuid("school_id").notNull().references(() => schools.id),
+  classId: uuid("class_id").notNull().references(() => classes.id),
+  studentId: uuid("student_id").notNull().references(() => students.id),
+  teacherId: uuid("teacher_id").notNull().references(() => teachers.id),
+  notes: text("notes").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

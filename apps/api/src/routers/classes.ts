@@ -4,13 +4,15 @@ import {
   updateClassInputSchema, 
   createSlotInputSchema, 
   updateSlotInputSchema,
-  enrollStudentInputSchema
+  enrollStudentInputSchema,
+  updateSessionLogInputSchema,
+  saveTermReportInputSchema
 } from "@institute/types";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { db } from "@workspace/db";
-import { classes, scheduleSlots, profiles, teachers, classEnrollments, students, classrooms, lessonSessions } from "@workspace/db/schema";
-import { eq, and, ne, or } from "drizzle-orm";
+import { classes, scheduleSlots, profiles, teachers, classEnrollments, students, classrooms, lessonSessions, studentTermReports } from "@workspace/db/schema";
+import { eq, and, ne, or, desc, isNull } from "drizzle-orm";
 
 export const classesRouter = router({
   // Class CRUD
@@ -872,6 +874,204 @@ export const classesRouter = router({
         .where(eq(scheduleSlots.id, input.id));
 
       return { success: true };
+    }),
+
+  // Virtual Register Procedures
+  updateSessionLog: subscribedProcedure
+    .input(
+      z.object({
+        session_id: z.string().uuid(),
+        data: updateSessionLogInputSchema,
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const [updated] = await db
+        .update(lessonSessions)
+        .set({
+          description: input.data.description,
+          homework: input.data.homework,
+          hoursTaught: input.data.hours_taught,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(lessonSessions.id, input.session_id),
+            eq(lessonSessions.schoolId, ctx.schoolId)
+          )
+        )
+        .returning();
+
+      if (!updated) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Ders seansı bulunamadı.",
+        });
+      }
+
+      return { success: true };
+    }),
+
+  saveTermReport: subscribedProcedure
+    .input(saveTermReportInputSchema)
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.userId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Authentication required",
+        });
+      }
+
+      // Find teacher profile linked to user
+      const [teacher] = await db
+        .select()
+        .from(teachers)
+        .where(eq(teachers.userId, ctx.userId))
+        .limit(1);
+
+      if (!teacher) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Sadece öğretmenler dönem raporu yazabilir.",
+        });
+      }
+
+      // Check if report already exists for this student and class
+      const [existing] = await db
+        .select()
+        .from(studentTermReports)
+        .where(
+          and(
+            eq(studentTermReports.schoolId, ctx.schoolId),
+            eq(studentTermReports.classId, input.class_id),
+            eq(studentTermReports.studentId, input.student_id)
+          )
+        )
+        .limit(1);
+
+      if (existing) {
+        await db
+          .update(studentTermReports)
+          .set({
+            notes: input.notes,
+            teacherId: teacher.id,
+            updatedAt: new Date(),
+          })
+          .where(eq(studentTermReports.id, existing.id));
+      } else {
+        await db
+          .insert(studentTermReports)
+          .values({
+            schoolId: ctx.schoolId,
+            classId: input.class_id,
+            studentId: input.student_id,
+            teacherId: teacher.id,
+            notes: input.notes,
+          });
+      }
+
+      return { success: true };
+    }),
+
+  listTermReports: schoolProcedure
+    .input(z.object({ class_id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const reports = await db
+        .select({
+          id: studentTermReports.id,
+          studentId: studentTermReports.studentId,
+          teacherId: studentTermReports.teacherId,
+          teacherName: teachers.fullName,
+          notes: studentTermReports.notes,
+          updatedAt: studentTermReports.updatedAt,
+        })
+        .from(studentTermReports)
+        .innerJoin(teachers, eq(studentTermReports.teacherId, teachers.id))
+        .where(
+          and(
+            eq(studentTermReports.schoolId, ctx.schoolId),
+            eq(studentTermReports.classId, input.class_id)
+          )
+        );
+
+      return reports;
+    }),
+
+  listClassSessionsWithLogs: schoolProcedure
+    .input(z.object({ class_id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const sessions = await db
+        .select({
+          id: lessonSessions.id,
+          sessionDate: lessonSessions.sessionDate,
+          status: lessonSessions.status,
+          description: lessonSessions.description,
+          homework: lessonSessions.homework,
+          hoursTaught: lessonSessions.hoursTaught,
+          checkinAt: lessonSessions.checkinAt,
+          checkoutAt: lessonSessions.checkoutAt,
+          teacherId: lessonSessions.teacherId,
+          teacherName: teachers.fullName,
+          studentCount: lessonSessions.studentCount,
+          startTime: scheduleSlots.startTime,
+          endTime: scheduleSlots.endTime,
+          roomName: scheduleSlots.roomName,
+          slotTeacherId: scheduleSlots.teacherId,
+        })
+        .from(lessonSessions)
+        .innerJoin(scheduleSlots, eq(lessonSessions.scheduleSlotId, scheduleSlots.id))
+        .leftJoin(teachers, eq(lessonSessions.teacherId, teachers.id))
+        .where(
+          and(
+            eq(scheduleSlots.classId, input.class_id),
+            eq(lessonSessions.schoolId, ctx.schoolId),
+            eq(lessonSessions.isActive, true)
+          )
+        )
+        .orderBy(desc(lessonSessions.sessionDate), desc(scheduleSlots.startTime));
+
+      return sessions.map((s) => ({
+        id: s.id,
+        session_date: s.sessionDate,
+        status: s.status,
+        description: s.description || "",
+        homework: s.homework || "",
+        hours_taught: s.hoursTaught || 0,
+        checkin_at: s.checkinAt ? s.checkinAt.toISOString() : null,
+        checkout_at: s.checkoutAt ? s.checkoutAt.toISOString() : null,
+        teacher_id: s.teacherId,
+        teacher_name: s.teacherName || "Atanmamış",
+        student_count: s.studentCount,
+        start_time: String(s.startTime).slice(0, 5),
+        end_time: String(s.endTime).slice(0, 5),
+        room_name: s.roomName,
+        is_cover: s.teacherId !== null && s.teacherId !== s.slotTeacherId,
+      }));
+    }),
+
+  getTeacherMissingLogsCount: schoolProcedure
+    .input(z.object({ teacher_id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const rows = await db
+        .select({ id: lessonSessions.id })
+        .from(lessonSessions)
+        .innerJoin(scheduleSlots, eq(lessonSessions.scheduleSlotId, scheduleSlots.id))
+        .where(
+          and(
+            eq(lessonSessions.schoolId, ctx.schoolId),
+            eq(lessonSessions.isActive, true),
+            eq(lessonSessions.status, "completed"),
+            or(
+              eq(scheduleSlots.teacherId, input.teacher_id),
+              eq(lessonSessions.teacherId, input.teacher_id)
+            ),
+            or(
+              eq(lessonSessions.description, ""),
+              isNull(lessonSessions.description)
+            )
+          )
+        );
+
+      return { count: rows.length };
     }),
 });
 
