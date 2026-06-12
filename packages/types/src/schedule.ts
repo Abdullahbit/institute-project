@@ -26,6 +26,7 @@ export const scheduleSlotSchema = z.object({
   student_count: z.number().int().nonnegative(),
   status: lessonStatusSchema,
   is_active: z.boolean(),
+  cancelled_dates: z.array(z.string()).optional(),
 });
 
 export type ScheduleSlot = z.infer<typeof scheduleSlotSchema>;

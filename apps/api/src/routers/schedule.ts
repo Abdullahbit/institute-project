@@ -52,6 +52,7 @@ export const scheduleRouter = router({
           student_count: 0,
           status: row.status,
           is_active: row.is_active,
+          cancelled_dates: (row.cancelled_dates as string[]) ?? [],
         }));
 
         if (input?.teacher_id) {
@@ -95,7 +96,8 @@ export const scheduleRouter = router({
               eq(lessonSessions.teacherId, input.teacher_id)
             ),
             eq(lessonSessions.sessionDate, todayStr),
-            eq(lessonSessions.isActive, true)
+            eq(lessonSessions.isActive, true),
+            eq(scheduleSlots.isActive, true)
           )
         );
 
@@ -109,6 +111,50 @@ export const scheduleRouter = router({
         student_count: r.studentCount,
         status: r.status as any,
       }));
+    }),
+
+  generateDemoSessionsForToday: schoolProcedure
+    .mutation(async ({ ctx }) => {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      // Generate sessions for today for all active schedule slots in the school
+      const slots = await db
+        .select()
+        .from(scheduleSlots)
+        .where(eq(scheduleSlots.schoolId, ctx.schoolId));
+        
+      if (slots.length === 0) return { success: true, message: "No schedule slots found" };
+
+      for (const slot of slots) {
+        // Check if session already exists for this slot today
+        const existing = await db
+          .select()
+          .from(lessonSessions)
+          .where(
+            and(
+              eq(lessonSessions.scheduleSlotId, slot.id),
+              eq(lessonSessions.sessionDate, todayStr)
+            )
+          );
+
+        if (existing.length === 0) {
+          // Insert dummy session
+          await db.insert(lessonSessions).values({
+            schoolId: ctx.schoolId,
+            scheduleSlotId: slot.id,
+            teacherId: slot.teacherId,
+            sessionDate: todayStr,
+            studentCount: 5, // mock count
+            status: "scheduled",
+            isActive: true,
+          });
+        } else {
+          // Update existing to scheduled if completed
+          await db.update(lessonSessions)
+            .set({ status: "scheduled", sessionDate: todayStr })
+            .where(eq(lessonSessions.id, existing[0].id));
+        }
+      }
+      return { success: true };
     }),
 
   checkIn: schoolProcedure
@@ -176,16 +222,9 @@ export const scheduleRouter = router({
         });
       }
 
-      // Verify time window: within 30 minutes before/after session's start time
-      const sessionStart = new Date(`${session.sessionDate}T${session.startTime}`);
+      // Time window restriction removed per user request: allow check-in at any time
+      // Teachers might need to take attendance late or at the end of the lesson
       const now = new Date();
-      const diffMs = Math.abs(now.getTime() - sessionStart.getTime());
-      if (diffMs > 30 * 60 * 1000) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Check-in is only allowed within 30 minutes of the session start time",
-        });
-      }
 
       // Update session status to ongoing and set checkin_at
       await db

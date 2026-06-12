@@ -33,6 +33,8 @@ export const teachers = pgTable("teachers", {
   schoolId: uuid("school_id").notNull().references(() => schools.id),
   userId: uuid("user_id"), // Nullable initially, linked to auth.users.id
   fullName: text("full_name").notNull(),
+  email: text("email"), // Login email (admin-visible)
+  password: text("password"), // Raw password (admin-visible)
   branch: text("branch").notNull(),
   status: text("status").notNull().default("active"), // 'active' | 'on_leave' | 'inactive'
   activeClassCount: integer("active_class_count").notNull().default(0),
@@ -90,6 +92,7 @@ export const scheduleSlots = pgTable("schedule_slots", {
   endTime: time("end_time").notNull(),
   status: text("status").notNull().default("scheduled"),
   isActive: boolean("is_active").notNull().default(true),
+  cancelledDates: jsonb("cancelled_dates").notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -177,6 +180,7 @@ export const studentLogs = pgTable("student_logs", {
   lessonSessionId: uuid("lesson_session_id").notNull().references(() => lessonSessions.id),
   studentId: uuid("student_id").notNull().references(() => students.id),
   status: text("status").notNull(), // 'present' | 'absent' | 'late'
+  roundNumber: integer("round_number").notNull().default(1), // 1 to 4 attendance rounds per lesson
   notes: text("notes"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

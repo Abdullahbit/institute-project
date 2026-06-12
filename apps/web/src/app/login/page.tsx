@@ -101,6 +101,10 @@ export default function LoginPage() {
         return;
       }
 
+      if (typeof window !== 'undefined' && u.user_metadata?.school_id) {
+        localStorage.setItem('x-school-id', u.user_metadata.school_id);
+      }
+
       // Check is_active status
       const isActive = u.user_metadata?.is_active ?? true;
       if (!isActive) {

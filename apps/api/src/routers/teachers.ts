@@ -31,6 +31,8 @@ export const teachersRouter = router({
         school_id: row.schoolId,
         user_id: row.userId,
         full_name: row.fullName,
+        email: row.email ?? null,
+        password: row.password ?? null,
         branch: row.branch,
         status: row.status as any,
         active_class_count: row.activeClassCount,
@@ -68,6 +70,8 @@ export const teachersRouter = router({
         school_id: teacher.schoolId,
         user_id: teacher.userId,
         full_name: teacher.fullName,
+        email: teacher.email ?? null,
+        password: teacher.password ?? null,
         branch: teacher.branch,
         status: teacher.status as any,
         active_class_count: teacher.activeClassCount,
@@ -109,6 +113,19 @@ export const teachersRouter = router({
           const { data: listData } = await ctx.supabase.auth.admin.listUsers();
           const existingUser = listData?.users?.find((u: any) => u.email === input.email);
           if (existingUser) {
+            // Check if profile exists and belongs to a different school to prevent cross-tenant collision
+            const [existingProfile] = await db
+              .select()
+              .from(profiles)
+              .where(eq(profiles.id, existingUser.id))
+              .limit(1);
+
+            if (existingProfile && existingProfile.schoolId !== ctx.schoolId) {
+              throw new TRPCError({
+                code: "CONFLICT",
+                message: "Bu e-posta adresi başka bir okulda zaten kayıtlı.",
+              });
+            }
             userId = existingUser.id;
           } else if (input.password) {
             const { data: createData, error: createError } = await ctx.supabase.auth.admin.createUser({
@@ -156,6 +173,8 @@ export const teachersRouter = router({
         .values({
           schoolId: ctx.schoolId,
           fullName: input.full_name,
+          email: input.email || null,
+          password: input.password || null,
           branch: input.branch,
           status: input.status,
           userId,

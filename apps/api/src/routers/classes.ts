@@ -9,7 +9,7 @@ import {
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { db } from "@workspace/db";
-import { classes, scheduleSlots, profiles, teachers, classEnrollments, students, classrooms } from "@workspace/db/schema";
+import { classes, scheduleSlots, profiles, teachers, classEnrollments, students, classrooms, lessonSessions } from "@workspace/db/schema";
 import { eq, and, ne, or } from "drizzle-orm";
 
 export const classesRouter = router({
@@ -235,6 +235,7 @@ export const classesRouter = router({
           endTime: scheduleSlots.endTime,
           status: scheduleSlots.status,
           isActive: scheduleSlots.isActive,
+          cancelledDates: scheduleSlots.cancelledDates,
           createdAt: scheduleSlots.createdAt,
           updatedAt: scheduleSlots.updatedAt,
         })
@@ -260,6 +261,7 @@ export const classesRouter = router({
         end_time: String(r.endTime).slice(0, 5),
         status: r.status as any,
         is_active: r.isActive,
+        cancelled_dates: r.cancelledDates as string[],
         created_at: r.createdAt.toISOString(),
         updated_at: r.updatedAt.toISOString(),
       }));
@@ -555,6 +557,17 @@ export const classesRouter = router({
         });
       }
 
+      // Also deactivate all pending (scheduled) future lesson_sessions for this slot
+      await db
+        .update(lessonSessions)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(
+          and(
+            eq(lessonSessions.scheduleSlotId, deleted.id),
+            eq(lessonSessions.status, 'scheduled')
+          )
+        );
+
       return { success: true };
     }),
 
@@ -793,6 +806,70 @@ export const classesRouter = router({
           message: "Classroom not found",
         });
       }
+
+      return { success: true };
+    }),
+
+  cancelSlotForDate: subscribedProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.userId || !ctx.schoolId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Authentication required",
+        });
+      }
+
+      // Admin check
+      const [caller] = await db
+        .select()
+        .from(profiles)
+        .where(eq(profiles.id, ctx.userId))
+        .limit(1);
+
+      if (!caller || caller.role !== "admin") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only administrators can cancel schedule slots",
+        });
+      }
+
+      // Fetch current slot
+      const [currentSlot] = await db
+        .select()
+        .from(scheduleSlots)
+        .where(
+          and(
+            eq(scheduleSlots.id, input.id),
+            eq(scheduleSlots.schoolId, ctx.schoolId)
+          )
+        )
+        .limit(1);
+
+      if (!currentSlot) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Schedule slot not found",
+        });
+      }
+
+      const currentCancelledDates = (currentSlot.cancelledDates as string[]) || [];
+      if (!currentCancelledDates.includes(input.date)) {
+        currentCancelledDates.push(input.date);
+      }
+
+      await db
+        .update(scheduleSlots)
+        .set({
+          cancelledDates: currentCancelledDates,
+          updatedAt: new Date(),
+        })
+        .where(eq(scheduleSlots.id, input.id));
 
       return { success: true };
     }),

@@ -14,29 +14,36 @@ import {
   User,
   BookOpen,
   Loader2,
-  X
+  X,
+  ClipboardCheck,
+  Check
 } from "lucide-react";
+
+const ROUND_LABELS = ["1. Tur", "2. Tur", "3. Tur", "4. Tur"];
 
 export default function TeacherTodayPage() {
   const { user, role, loading } = useAuth();
   const router = useRouter();
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [sandboxBypass, setSandboxBypass] = useState<boolean>(true); // Default to true for easy sandbox verification
+  const [sandboxBypass, setSandboxBypass] = useState<boolean>(true);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Yoklama ve karne durumları
-  const logAttendance = trpc.students.logAttendance.useMutation();
-  const submitProgressReport = trpc.students.submitProgressReport.useMutation();
-
+  // Attendance modal state
   const [attendanceModalOpen, setAttendanceModalOpen] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [activeClassId, setActiveClassId] = useState<string | null>(null);
   const [activeClassName, setActiveClassName] = useState("");
   const [activeLevelCode, setActiveLevelCode] = useState("");
+  const [activeRound, setActiveRound] = useState(1); // 1-4
+  // Per-round roster states: roundStates[roundNum][studentId] = {status, notes}
+  const [roundStates, setRoundStates] = useState<Record<number, Record<string, { status: "present" | "absent" | "late"; notes: string }>>>({});
+  const [savingAttendance, setSavingAttendance] = useState(false);
+  const [attendanceError, setAttendanceError] = useState<string | null>(null);
+  const [submittedRounds, setSubmittedRounds] = useState<number[]>([]);
 
-  const [rosterStates, setRosterStates] = useState<Record<string, { status: "present" | "absent" | "late", notes: string }>>({});
+  // Progress report states
   const [reportStates, setReportStates] = useState<Record<string, {
     enable: boolean;
     score_listening: number;
@@ -44,8 +51,9 @@ export default function TeacherTodayPage() {
     score_overall: number;
     notes: string;
   }>>({});
-  const [savingAttendance, setSavingAttendance] = useState(false);
-  const [attendanceError, setAttendanceError] = useState<string | null>(null);
+
+  const logAttendance = trpc.students.logAttendance.useMutation();
+  const submitProgressReport = trpc.students.submitProgressReport.useMutation();
 
   // Protect route
   useEffect(() => {
@@ -61,7 +69,7 @@ export default function TeacherTodayPage() {
 
   const activeTeacher = teachersList?.find((t) => t.user_id === user?.id);
 
-  // 2. Fetch today's lessons using teacher_id
+  // 2. Fetch today's lessons
   const { 
     data: sessions, 
     isLoading: loadingSessions, 
@@ -72,26 +80,32 @@ export default function TeacherTodayPage() {
     { enabled: !!activeTeacher?.id }
   );
 
-  // Fetch enrolled students of selected class
+  // 3. Fetch class students (when modal opens)
   const { data: classStudents, isLoading: loadingClassStudents } = trpc.classes.listClassStudents.useQuery(
     { class_id: activeClassId || "" },
     { enabled: !!activeClassId && attendanceModalOpen }
   );
 
-  // Initialize form states when class roster is fetched
-  useEffect(() => {
-    if (classStudents) {
-      const initialRoster: Record<string, { status: "present" | "absent" | "late", notes: string }> = {};
-      const initialReports: Record<string, {
-        enable: boolean;
-        score_listening: number;
-        score_speaking: number;
-        score_overall: number;
-        notes: string;
-      }> = {};
+  // 4. Fetch already-submitted rounds for the active session
+  const { data: serverSubmittedRounds, refetch: refetchRounds } = trpc.students.getSessionRounds.useQuery(
+    { session_id: activeSessionId || "" },
+    { enabled: !!activeSessionId && attendanceModalOpen }
+  );
 
+  // Sync submitted rounds from server
+  useEffect(() => {
+    if (serverSubmittedRounds) {
+      setSubmittedRounds(serverSubmittedRounds);
+    }
+  }, [serverSubmittedRounds]);
+
+  // Initialize per-round roster when class students load
+  useEffect(() => {
+    if (classStudents && classStudents.length > 0) {
+      const initialRound: Record<string, { status: "present" | "absent" | "late"; notes: string }> = {};
+      const initialReports: typeof reportStates = {};
       classStudents.forEach((student) => {
-        initialRoster[student.id] = { status: "present", notes: "" };
+        initialRound[student.id] = { status: "present", notes: "" };
         initialReports[student.id] = {
           enable: false,
           score_listening: 80,
@@ -100,8 +114,8 @@ export default function TeacherTodayPage() {
           notes: "",
         };
       });
-
-      setRosterStates(initialRoster);
+      // Initialize all 4 rounds
+      setRoundStates({ 1: { ...initialRound }, 2: { ...initialRound }, 3: { ...initialRound }, 4: { ...initialRound } });
       setReportStates(initialReports);
     }
   }, [classStudents]);
@@ -129,22 +143,19 @@ export default function TeacherTodayPage() {
     onError: (err) => {
       setErrorMessage(err.message || "Çıkış işlemi başarısız oldu.");
       setSuccessMessage(null);
+      setShowConfirmModal(false);
+    }
+  });
+
+  const generateDemoMutation = trpc.schedule.generateDemoSessionsForToday.useMutation({
+    onSuccess: () => {
+      setSuccessMessage("Bugünün demo dersleri başarıyla oluşturuldu/güncellendi.");
+      refetch();
     }
   });
 
   const handleCheckIn = (sessionId: string, startTime: string) => {
-    if (!sandboxBypass) {
-      const now = new Date();
-      const [hour, min] = startTime.split(":");
-      const sessionStart = new Date();
-      sessionStart.setHours(Number(hour), Number(min), 0, 0);
-      const diffMs = Math.abs(now.getTime() - sessionStart.getTime());
-      if (diffMs > 30 * 60 * 1000) {
-        setErrorMessage("Derse giriş sadece başlangıç saatinden 30 dakika önce veya sonra yapılabilir.");
-        return;
-      }
-    }
-
+    // Time restriction removed: teachers can check in anytime
     checkInMutation.mutate({ session_id: sessionId });
   };
 
@@ -164,55 +175,62 @@ export default function TeacherTodayPage() {
     setActiveClassName(session.class_name);
     setActiveLevelCode(session.level_code || "General-Course");
     setAttendanceError(null);
-    setRosterStates({});
+    setActiveRound(1);
+    setRoundStates({});
     setReportStates({});
+    setSubmittedRounds([]);
     setAttendanceModalOpen(true);
   };
 
-  const handleSaveAttendance = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveRound = async () => {
     if (!activeSessionId || !classStudents) return;
 
     setSavingAttendance(true);
     setAttendanceError(null);
 
     try {
-      // 1. Submit Attendance Log
+      const currentRoundState = roundStates[activeRound] || {};
       const rosterList = classStudents.map((student) => ({
         student_id: student.id,
-        status: rosterStates[student.id]?.status || "present",
-        notes: rosterStates[student.id]?.notes || undefined,
+        status: currentRoundState[student.id]?.status || "present",
+        notes: currentRoundState[student.id]?.notes || undefined,
       }));
 
-      await logAttendance.mutateAsync({
+      await (logAttendance.mutateAsync as any)({
         session_id: activeSessionId,
+        round_number: activeRound,
         roster: rosterList,
       });
 
-      // 2. Submit Progress Reports for enabled students
-      const teacherId = activeTeacher?.id;
-      if (!teacherId) {
-        throw new Error("Öğretmen kimliği bulunamadı.");
-      }
+      setSubmittedRounds((prev) => prev.includes(activeRound) ? prev : [...prev, activeRound].sort());
+      refetchRounds();
 
-      for (const student of classStudents) {
-        const report = reportStates[student.id];
-        if (report && report.enable) {
-          await submitProgressReport.mutateAsync({
-            student_id: student.id,
-            teacher_id: teacherId,
-            level_code: activeLevelCode,
-            score_listening: Number(report.score_listening),
-            score_speaking: Number(report.score_speaking),
-            score_overall: Number(report.score_overall),
-            notes: report.notes || undefined,
-          });
+      // If last round, also save progress reports
+      if (activeRound === 4) {
+        const teacherId = activeTeacher?.id;
+        if (teacherId) {
+          for (const student of classStudents) {
+            const report = reportStates[student.id];
+            if (report && report.enable) {
+              await submitProgressReport.mutateAsync({
+                student_id: student.id,
+                teacher_id: teacherId,
+                level_code: activeLevelCode,
+                score_listening: Number(report.score_listening),
+                score_speaking: Number(report.score_speaking),
+                score_overall: Number(report.score_overall),
+                notes: report.notes || undefined,
+              });
+            }
+          }
         }
+        setSuccessMessage(`${activeClassName} — Tüm 4 tur yoklaması ve karne notları kaydedildi!`);
+        setAttendanceModalOpen(false);
+        refetch();
+      } else {
+        // Move to next round automatically
+        setActiveRound(activeRound + 1);
       }
-
-      setSuccessMessage("Yoklama ve gelişim raporları başarıyla kaydedildi!");
-      setAttendanceModalOpen(false);
-      refetch();
     } catch (err: any) {
       setAttendanceError(err?.message || "Kayıt işlemi başarısız oldu.");
     } finally {
@@ -220,40 +238,39 @@ export default function TeacherTodayPage() {
     }
   };
 
-  // Helper to determine status style
+  const setStudentStatus = (studentId: string, status: "present" | "absent" | "late") => {
+    setRoundStates((prev) => ({
+      ...prev,
+      [activeRound]: {
+        ...(prev[activeRound] || {}),
+        [studentId]: { ...(prev[activeRound]?.[studentId] || { status: "present", notes: "" }), status },
+      },
+    }));
+  };
+
+  const setStudentNote = (studentId: string, notes: string) => {
+    setRoundStates((prev) => ({
+      ...prev,
+      [activeRound]: {
+        ...(prev[activeRound] || {}),
+        [studentId]: { ...(prev[activeRound]?.[studentId] || { status: "present", notes: "" }), notes },
+      },
+    }));
+  };
+
   const getStatusConfig = (status: string) => {
     switch (status) {
       case "ongoing":
       case "in_progress":
-        return {
-          bg: "bg-emerald-50 text-emerald-700 border-emerald-200",
-          text: "Devam Ediyor",
-          indicator: "bg-emerald-500 animate-pulse",
-        };
+        return { bg: "bg-emerald-50 text-emerald-700 border-emerald-200", text: "Devam Ediyor", indicator: "bg-emerald-500 animate-pulse" };
       case "completed":
-        return {
-          bg: "bg-indigo-50 text-indigo-700 border-indigo-200",
-          text: "Tamamlandı",
-          indicator: "bg-indigo-500",
-        };
+        return { bg: "bg-indigo-50 text-indigo-700 border-indigo-200", text: "Tamamlandı", indicator: "bg-indigo-500" };
       case "late":
-        return {
-          bg: "bg-amber-50 text-amber-700 border-amber-200",
-          text: "Gecikme",
-          indicator: "bg-amber-500",
-        };
+        return { bg: "bg-amber-50 text-amber-700 border-amber-200", text: "Gecikme", indicator: "bg-amber-500" };
       case "no_show":
-        return {
-          bg: "bg-rose-50 text-rose-700 border-rose-200",
-          text: "Gelmedi",
-          indicator: "bg-rose-500",
-        };
+        return { bg: "bg-rose-50 text-rose-700 border-rose-200", text: "Gelmedi", indicator: "bg-rose-500" };
       default:
-        return {
-          bg: "bg-slate-100 text-slate-700 border-slate-200",
-          text: "Planlandı",
-          indicator: "bg-slate-500",
-        };
+        return { bg: "bg-slate-100 text-slate-700 border-slate-200", text: "Planlandı", indicator: "bg-slate-500" };
     }
   };
 
@@ -311,7 +328,7 @@ export default function TeacherTodayPage() {
           </div>
         )}
 
-        {/* Title Section / Action Row */}
+        {/* Title Section */}
         <div className="flex justify-between items-center">
           <div>
             <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Bugünkü Dersleriniz</h2>
@@ -334,7 +351,6 @@ export default function TeacherTodayPage() {
             ))}
           </div>
         ) : !sessions || sessions.length === 0 ? (
-          /* Empty State */
           <div className="bg-white border border-slate-200/60 rounded-xl p-12 text-center flex flex-col items-center gap-4 shadow-sm">
             <div className="h-12 w-12 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 text-xl shadow-inner">
               📅
@@ -343,9 +359,17 @@ export default function TeacherTodayPage() {
               <h3 className="font-bold text-slate-800 text-base">Bugün dersiniz bulunmamaktadır</h3>
               <p className="text-xs text-slate-500 mt-1">Geri çekilin ve günün keyfini çıkarın!</p>
             </div>
+            {sandboxBypass && (
+              <button
+                onClick={() => generateDemoMutation.mutate()}
+                disabled={generateDemoMutation.isPending}
+                className="mt-4 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold py-2 px-4 rounded-lg transition-all shadow-sm"
+              >
+                {generateDemoMutation.isPending ? "Oluşturuluyor..." : "TEST: Bugünkü Dersleri Oluştur"}
+              </button>
+            )}
           </div>
         ) : (
-          /* Classes List */
           <div className="flex flex-col gap-4">
             {sessions.map((session) => {
               const statusConfig = getStatusConfig(session.status);
@@ -362,7 +386,7 @@ export default function TeacherTodayPage() {
                       : "border-slate-200/60 shadow-sm"
                   }`}
                 >
-                  {/* Card Header Info */}
+                  {/* Card Header */}
                   <div className="flex justify-between items-start">
                     <div className="flex flex-col gap-1.5">
                       <div className="flex items-center gap-2">
@@ -370,7 +394,6 @@ export default function TeacherTodayPage() {
                           <BookOpen className="h-3 w-3" />
                           Grup Dersi
                         </span>
-                        {/* Status Badge */}
                         <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border flex items-center gap-1.5 ${statusConfig.bg}`}>
                           <span className={`h-1.5 w-1.5 rounded-full ${statusConfig.indicator}`}></span>
                           {statusConfig.text}
@@ -387,7 +410,7 @@ export default function TeacherTodayPage() {
                     </div>
                   </div>
 
-                  {/* Card Body Details */}
+                  {/* Card Body */}
                   <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200/60 text-xs">
                     <div className="flex items-center gap-2 text-slate-500">
                       <MapPin className="h-4 w-4 text-slate-400" />
@@ -425,8 +448,8 @@ export default function TeacherTodayPage() {
                           onClick={() => handleOpenAttendance(session)}
                           className="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-3.5 px-4 rounded-lg transition-all shadow-sm flex items-center justify-center gap-1.5"
                         >
-                          <BookOpen className="h-4 w-4" />
-                          YOKLAMA AL & KARNE YAZ
+                          <ClipboardCheck className="h-4 w-4" />
+                          YOKLAMA AL (4 TUR)
                         </button>
                         <button
                           onClick={() => handleOpenCheckOut(session.id)}
@@ -451,7 +474,7 @@ export default function TeacherTodayPage() {
         )}
       </div>
 
-      {/* Yoklama ve Değerlendirme Modali */}
+      {/* ─── Yoklama Modal — 4 Tur ─── */}
       {attendanceModalOpen && activeSessionId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div 
@@ -459,13 +482,17 @@ export default function TeacherTodayPage() {
             onClick={() => setAttendanceModalOpen(false)}
           />
           <div 
-            className="relative bg-white rounded-2xl w-full max-w-2xl p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[85vh]"
+            className="relative bg-white rounded-2xl w-full max-w-2xl shadow-2xl border border-slate-200 flex flex-col max-h-[90vh]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 shrink-0">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
               <div>
-                <h3 className="font-bold text-slate-900 text-lg">Yoklama ve Gelişim Girişi</h3>
-                <p className="text-xs text-slate-500 font-medium mt-0.5">{activeClassName} sınıfı günlük yoklama listesi.</p>
+                <h3 className="font-bold text-slate-900 text-lg flex items-center gap-2">
+                  <ClipboardCheck className="h-5 w-5 text-emerald-600" />
+                  Yoklama Al
+                </h3>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">{activeClassName} — Her derste 4 tur yoklama alınır.</p>
               </div>
               <button 
                 onClick={() => setAttendanceModalOpen(false)}
@@ -475,13 +502,43 @@ export default function TeacherTodayPage() {
               </button>
             </div>
 
+            {/* Round Tab Selector */}
+            <div className="flex gap-1 px-6 pt-4 shrink-0">
+              {[1, 2, 3, 4].map((round) => {
+                const isDone = submittedRounds.includes(round);
+                const isActive = activeRound === round;
+                return (
+                  <button
+                    key={round}
+                    onClick={() => setActiveRound(round)}
+                    className={`flex-1 py-2.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 border ${
+                      isDone
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        : isActive
+                        ? "bg-primary/10 text-primary border-primary/30 shadow-sm"
+                        : "bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100"
+                    }`}
+                  >
+                    {isDone ? (
+                      <Check className="h-3.5 w-3.5 text-emerald-600" />
+                    ) : (
+                      <span className={`h-1.5 w-1.5 rounded-full ${isActive ? "bg-primary animate-pulse" : "bg-slate-300"}`} />
+                    )}
+                    {ROUND_LABELS[round - 1]}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Error */}
             {attendanceError && (
-              <div className="mt-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold shrink-0">
+              <div className="mx-6 mt-3 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold shrink-0">
                 {attendanceError}
               </div>
             )}
 
-            <div className="flex-1 overflow-y-auto py-4 space-y-6">
+            {/* Student List */}
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
               {loadingClassStudents ? (
                 <div className="flex flex-col items-center justify-center py-12 gap-2 text-slate-500 font-medium">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -490,193 +547,174 @@ export default function TeacherTodayPage() {
               ) : !classStudents || classStudents.length === 0 ? (
                 <p className="text-xs text-slate-450 italic text-center py-8">Bu sınıfa henüz hiç öğrenci kaydedilmemiş.</p>
               ) : (
-                <form onSubmit={handleSaveAttendance} className="space-y-6">
-                  {classStudents.map((student) => {
-                    const rState = rosterStates[student.id] || { status: "present", notes: "" };
-                    const repState = reportStates[student.id] || { enable: false, score_listening: 80, score_speaking: 80, score_overall: 80, notes: "" };
+                <>
+                  {/* Round label */}
+                  <div className="text-xs font-bold text-slate-500 uppercase tracking-wider pb-1">
+                    {ROUND_LABELS[activeRound - 1]} Yoklaması
+                    {submittedRounds.includes(activeRound) && (
+                      <span className="ml-2 text-emerald-600 font-semibold normal-case">✓ Kaydedildi</span>
+                    )}
+                  </div>
 
+                  {classStudents.map((student) => {
+                    const sState = roundStates[activeRound]?.[student.id] || { status: "present" as const, notes: "" };
                     return (
-                      <div key={student.id} className="border border-slate-200/60 rounded-xl p-4 bg-slate-50/50 space-y-4">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                      <div key={student.id} className="border border-slate-200/70 rounded-xl p-4 bg-slate-50/40 space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                           <span className="font-bold text-slate-800 text-sm">{student.full_name}</span>
-                          
-                          {/* Yoklama Butonları */}
+
+                          {/* Status Toggle */}
                           <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-200 select-none">
                             {[
-                              { val: "present", label: "Derste", bg: "peer-checked:bg-emerald-500/10 peer-checked:text-emerald-700 peer-checked:border-emerald-200" },
-                              { val: "absent", label: "Gelmedi", bg: "peer-checked:bg-rose-500/10 peer-checked:text-rose-700 peer-checked:border-rose-200" },
-                              { val: "late", label: "Geç Kaldı", bg: "peer-checked:bg-amber-500/10 peer-checked:text-amber-700 peer-checked:border-amber-200" }
+                              { val: "present" as const, label: "Var", activeClass: "bg-emerald-500 text-white shadow-sm" },
+                              { val: "absent" as const, label: "Yok", activeClass: "bg-rose-500 text-white shadow-sm" },
+                              { val: "late" as const, label: "Geç", activeClass: "bg-amber-500 text-white shadow-sm" },
                             ].map((opt) => (
-                              <label key={opt.val} className="relative cursor-pointer">
-                                <input
-                                  type="radio"
-                                  name={`status-${student.id}`}
-                                  value={opt.val}
-                                  checked={rState.status === opt.val}
-                                  onChange={() => {
-                                    setRosterStates((prev) => ({
-                                      ...prev,
-                                      [student.id]: { ...prev[student.id], status: opt.val as any },
-                                    }));
-                                  }}
-                                  className="sr-only peer"
-                                />
-                                <span className={`text-[11px] font-semibold text-slate-500 px-3 py-1.5 rounded-md border border-transparent hover:bg-slate-50 transition-all block peer-checked:shadow-sm ${opt.bg}`}>
-                                  {opt.label}
-                                </span>
-                              </label>
+                              <button
+                                key={opt.val}
+                                type="button"
+                                onClick={() => setStudentStatus(student.id, opt.val)}
+                                className={`text-[11px] font-bold px-3 py-1.5 rounded-md transition-all ${
+                                  sState.status === opt.val
+                                    ? opt.activeClass
+                                    : "text-slate-500 hover:bg-slate-100"
+                                }`}
+                              >
+                                {opt.label}
+                              </button>
                             ))}
                           </div>
                         </div>
 
-                        {/* Yoklama Notu Girişi */}
-                        <div className="space-y-1.5">
-                          <input
-                            type="text"
-                            placeholder="Yoklama notu (örn: 10 dk geç geldi, erken ayrıldı)"
-                            value={rState.notes}
-                            onChange={(e) => {
-                              setRosterStates((prev) => ({
-                                ...prev,
-                                [student.id]: { ...prev[student.id], notes: e.target.value },
-                              }));
-                            }}
-                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:border-primary transition-all"
-                          />
-                        </div>
+                        {/* Note input */}
+                        <input
+                          type="text"
+                          placeholder="Not ekle (isteğe bağlı)"
+                          value={sState.notes}
+                          onChange={(e) => setStudentNote(student.id, e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:border-primary transition-all"
+                        />
 
-                        {/* Karne Girişi Aç/Kapa */}
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            id={`report-chk-${student.id}`}
-                            checked={repState.enable}
-                            onChange={(e) => {
-                              setReportStates((prev) => ({
-                                ...prev,
-                                [student.id]: { ...prev[student.id], enable: e.target.checked },
-                              }));
-                            }}
-                            className="rounded border-slate-300 text-primary focus:ring-primary h-4.5 w-4.5"
-                          />
-                          <label htmlFor={`report-chk-${student.id}`} className="text-xs font-bold text-slate-600 select-none cursor-pointer">
-                            Bugünkü ders için Karne / Gelişim Raporu ekle
-                          </label>
-                        </div>
-
-                        {/* Rapor Detayları (Açık ise) */}
-                        {repState.enable && (
-                          <div className="bg-white border border-slate-200 rounded-xl p-4 grid grid-cols-1 sm:grid-cols-3 gap-4 animate-fade-in text-xs">
-                            <div className="space-y-1">
-                              <label className="font-bold text-slate-500 block">Dinleme Skoru (0-100)</label>
+                        {/* Progress report (only on last round) */}
+                        {activeRound === 4 && (
+                          <div className="space-y-2 pt-1 border-t border-slate-100">
+                            <div className="flex items-center gap-2">
                               <input
-                                type="number"
-                                min="0"
-                                max="100"
-                                value={repState.score_listening}
-                                onChange={(e) => {
+                                type="checkbox"
+                                id={`report-chk-${student.id}`}
+                                checked={reportStates[student.id]?.enable || false}
+                                onChange={(e) =>
                                   setReportStates((prev) => ({
                                     ...prev,
-                                    [student.id]: { ...prev[student.id], score_listening: Number(e.target.value) },
-                                  }));
-                                }}
-                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 font-medium text-slate-700 focus:outline-none focus:border-primary focus:bg-white"
+                                    [student.id]: { ...prev[student.id], enable: e.target.checked },
+                                  }))
+                                }
+                                className="rounded border-slate-300 text-primary focus:ring-primary"
                               />
+                              <label htmlFor={`report-chk-${student.id}`} className="text-xs font-bold text-slate-600 cursor-pointer">
+                                Karne / Gelişim Raporu ekle
+                              </label>
                             </div>
-                            <div className="space-y-1">
-                              <label className="font-bold text-slate-500 block">Konuşma Skoru (0-100)</label>
-                              <input
-                                type="number"
-                                min="0"
-                                max="100"
-                                value={repState.score_speaking}
-                                onChange={(e) => {
-                                  setReportStates((prev) => ({
-                                    ...prev,
-                                    [student.id]: { ...prev[student.id], score_speaking: Number(e.target.value) },
-                                  }));
-                                }}
-                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 font-medium text-slate-700 focus:outline-none focus:border-primary focus:bg-white"
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="font-bold text-slate-500 block">Genel Skor (0-100)</label>
-                              <input
-                                type="number"
-                                min="0"
-                                max="100"
-                                value={repState.score_overall}
-                                onChange={(e) => {
-                                  setReportStates((prev) => ({
-                                    ...prev,
-                                    [student.id]: { ...prev[student.id], score_overall: Number(e.target.value) },
-                                  }));
-                                }}
-                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 font-medium text-slate-700 focus:outline-none focus:border-primary focus:bg-white"
-                              />
-                            </div>
-                            <div className="sm:col-span-3 space-y-1">
-                              <label className="font-bold text-slate-500 block">Öğretmen Değerlendirme Notu</label>
-                              <textarea
-                                placeholder="Öğrencinin dersteki performansı hakkında değerlendirme notu..."
-                                value={repState.notes}
-                                onChange={(e) => {
-                                  setReportStates((prev) => ({
-                                    ...prev,
-                                    [student.id]: { ...prev[student.id], notes: e.target.value },
-                                  }));
-                                }}
-                                rows={2}
-                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 font-medium text-slate-700 focus:outline-none focus:border-primary focus:bg-white placeholder-slate-400"
-                              />
-                            </div>
+                            {reportStates[student.id]?.enable && (
+                              <div className="grid grid-cols-3 gap-3 bg-white border border-slate-200 p-3 rounded-xl text-xs">
+                                {[
+                                  { key: "score_listening" as const, label: "Dinleme (0-100)" },
+                                  { key: "score_speaking" as const, label: "Konuşma (0-100)" },
+                                  { key: "score_overall" as const, label: "Genel (0-100)" },
+                                ].map((s) => (
+                                  <div key={s.key} className="space-y-1">
+                                    <label className="font-bold text-slate-500 block">{s.label}</label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="100"
+                                      value={reportStates[student.id]?.[s.key] ?? 80}
+                                      onChange={(e) =>
+                                        setReportStates((prev) => ({
+                                          ...prev,
+                                          [student.id]: { ...prev[student.id], [s.key]: Number(e.target.value) },
+                                        }))
+                                      }
+                                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 font-medium text-slate-700 focus:outline-none focus:border-primary"
+                                    />
+                                  </div>
+                                ))}
+                                <div className="col-span-3 space-y-1">
+                                  <label className="font-bold text-slate-500 block">Değerlendirme Notu</label>
+                                  <textarea
+                                    placeholder="Öğrencinin performansı hakkında not..."
+                                    value={reportStates[student.id]?.notes || ""}
+                                    onChange={(e) =>
+                                      setReportStates((prev) => ({
+                                        ...prev,
+                                        [student.id]: { ...prev[student.id], notes: e.target.value },
+                                      }))
+                                    }
+                                    rows={2}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 font-medium text-slate-700 focus:outline-none focus:border-primary placeholder-slate-400"
+                                  />
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
                     );
                   })}
-
-                  <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setAttendanceModalOpen(false)}
-                      disabled={savingAttendance}
-                      className="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
-                    >
-                      İptal
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={savingAttendance}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors disabled:opacity-50 flex items-center gap-1.5"
-                    >
-                      {savingAttendance ? (
-                        <>
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          Kaydediliyor...
-                        </>
-                      ) : (
-                        "Yoklama ve Karneleri Kaydet"
-                      )}
-                    </button>
-                  </div>
-                </form>
+                </>
               )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50 rounded-b-2xl shrink-0">
+              <span className="text-[11px] text-slate-400 font-medium">
+                {submittedRounds.length}/4 tur tamamlandı
+              </span>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setAttendanceModalOpen(false)}
+                  disabled={savingAttendance}
+                  className="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
+                >
+                  Kapat
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveRound}
+                  disabled={savingAttendance || !classStudents || classStudents.length === 0}
+                  className={`px-5 py-2 text-white text-xs font-bold rounded-lg shadow-sm transition-colors disabled:opacity-50 flex items-center gap-1.5 ${
+                    activeRound === 4
+                      ? "bg-indigo-600 hover:bg-indigo-500"
+                      : "bg-emerald-600 hover:bg-emerald-500"
+                  }`}
+                >
+                  {savingAttendance ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Kaydediliyor...
+                    </>
+                  ) : activeRound === 4 ? (
+                    "4. Turu Kaydet & Bitir"
+                  ) : (
+                    `${ROUND_LABELS[activeRound - 1]}'u Kaydet → ${ROUND_LABELS[activeRound]}`
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Confirmation Modal */}
+      {/* Checkout Confirm Modal */}
       {showConfirmModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowConfirmModal(false)}></div>
-          <div className="relative bg-white border border-slate-200/60 rounded-xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200">
+          <div className="relative bg-white border border-slate-200/60 rounded-xl w-full max-w-md p-6 shadow-xl">
             <h3 className="font-bold text-slate-900 text-base mb-2">Dersi Sonlandır?</h3>
             <p className="text-xs text-slate-500 leading-normal mb-5">
               Bu ders seansını tamamlamak istediğinizden emin misiniz? Sistem geçen süreyi hesaplayacak ve otomatik bir saat kaydı oluşturacaktır.
             </p>
-
             <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
               <button
                 type="button"

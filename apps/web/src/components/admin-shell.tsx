@@ -15,7 +15,8 @@ import {
   Settings,
   LogOut,
   BookOpen,
-  MessageSquare
+  MessageSquare,
+  ClipboardCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
@@ -58,6 +59,7 @@ const adminNavItems = [
   { href: "/siniflar", label: "Sınıflar", translationKey: "nav_classes" as const, icon: BookOpen },
   { href: "/ogretmenler", label: "Öğretmenler", translationKey: "nav_teachers" as const, icon: Users },
   { href: "/ogrenciler", label: "Öğrenciler", translationKey: "nav_students" as const, icon: GraduationCap },
+  { href: "/yoklama", label: "Yoklama", translationKey: "nav_home" as const, icon: ClipboardCheck },
   { href: "/saat-takibi", label: "Saat Takibi", translationKey: "nav_hours" as const, icon: Clock },
   { href: "/uyarilar", label: "Uyarılar", translationKey: "nav_alerts" as const, icon: Bell },
   { href: "/mesajlar", label: "Mesajlar", translationKey: "nav_messages" as const, icon: MessageSquare },
@@ -73,6 +75,7 @@ const founderNavItems = [
 const teacherNavItems = [
   { href: "/teacher/dashboard", label: "Ana Sayfa", translationKey: "nav_home" as const, icon: Home },
   { href: "/teacher/today", label: "Bugünkü Derslerim", translationKey: "nav_program" as const, icon: Calendar },
+  { href: "/teacher/today", label: "Yoklama Al", translationKey: "nav_yoklama" as const, icon: ClipboardCheck },
   { href: "/teacher/mesajlar", label: "Mesajlar", translationKey: "nav_messages" as const, icon: MessageSquare },
 ];
 

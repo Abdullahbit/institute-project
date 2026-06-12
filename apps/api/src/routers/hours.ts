@@ -3,7 +3,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { db } from "@workspace/db";
 import { hourLogs, teachers, profiles } from "@workspace/db/schema";
-import { eq, and, like, desc } from "drizzle-orm";
+import { eq, and, like, desc, sql } from "drizzle-orm";
 import { createManualHourLogInputSchema } from "@institute/types";
 
 export const hoursRouter = router({
@@ -52,7 +52,7 @@ export const hoursRouter = router({
       }
 
       if (input?.month) {
-        conditions.push(like(hourLogs.logDate, `${input.month}-%`));
+        conditions.push(sql`to_char(${hourLogs.logDate}, 'YYYY-MM') = ${input.month}`);
       }
 
       const logs = await db
@@ -370,7 +370,7 @@ export const hoursRouter = router({
             eq(hourLogs.teacherId, input.teacher_id),
             eq(hourLogs.schoolId, ctx.schoolId),
             eq(hourLogs.isActive, true),
-            like(hourLogs.logDate, `${input.month}-%`)
+            sql`to_char(${hourLogs.logDate}, 'YYYY-MM') = ${input.month}`
           )
         )
         .orderBy(desc(hourLogs.loggedAt));
