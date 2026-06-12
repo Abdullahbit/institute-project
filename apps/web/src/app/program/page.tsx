@@ -95,7 +95,7 @@ export default function ProgramPage() {
   const [classId, setClassId] = useState("");
   const [teacherId, setTeacherId] = useState("");
   const [roomName, setRoomName] = useState("");
-  const [dayOfWeek, setDayOfWeek] = useState(0);
+  const [selectedDays, setSelectedDays] = useState<number[]>([0]);
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("09:50");
 
@@ -121,13 +121,6 @@ export default function ProgramPage() {
     if (selectedRoom && lesson.room_name !== selectedRoom) return false;
     return true;
   });
-
-  const selectedDayLessons = useMemo(() => {
-    if (!selectedDayDate) return [];
-    const dayIndex = getDayOfWeekIndex(selectedDayDate);
-    return filteredLessons.filter((l) => Number(l.day_of_week) === dayIndex)
-      .sort((a, b) => a.start_time.localeCompare(b.start_time));
-  }, [selectedDayDate, filteredLessons]);
 
   // Mutations
   const createSlotMutation = trpc.classes.createSlot.useMutation();
@@ -214,6 +207,94 @@ export default function ProgramPage() {
     return cells;
   }, [currentDate]);
 
+  // Generate actual lesson occurrences for the visible calendar cells
+  const actualOccurrences = useMemo(() => {
+    if (!apiData || apiData.length === 0 || calendarCells.length === 0) return [];
+    
+    // Find the latest date in the calendar cells to cap our generation loop
+    const maxDate = new Date(calendarCells[calendarCells.length - 1].date);
+    maxDate.setHours(23, 59, 59, 999);
+
+    // Group the slots by class
+    const slotsByClass: Record<string, typeof apiData> = {};
+    for (const slot of filteredLessons) {
+      if (!slotsByClass[slot.class_id]) {
+        slotsByClass[slot.class_id] = [];
+      }
+      slotsByClass[slot.class_id].push(slot);
+    }
+
+    const occurrences: Array<typeof apiData[0] & { dateStr: string; date: Date }> = [];
+
+    // For each class, generate occurrences from its creation date up to maxDate
+    for (const classId of Object.keys(slotsByClass)) {
+      const classSlots = slotsByClass[classId];
+      const firstSlot = classSlots[0];
+      const quantity = (firstSlot as any).class_quantity || 0;
+      const quantityType = (firstSlot as any).class_quantity_type || "classes";
+      
+      const creationDate = new Date((firstSlot as any).class_created_at);
+      creationDate.setHours(0, 0, 0, 0);
+
+      // Start loop from the creation date
+      let loopDate = new Date(creationDate);
+      let count = 0;
+      let hours = 0;
+
+      // We'll loop up to maxDate, incrementing day-by-day.
+      // To avoid infinite loops in case of corrupt dates, cap at 365 days max.
+      const capDate = new Date(creationDate);
+      capDate.setDate(capDate.getDate() + 365);
+      const loopCap = maxDate < capDate ? maxDate : capDate;
+
+      while (loopDate <= loopCap) {
+        const dayOfWeekIndex = getDayOfWeekIndex(loopDate);
+        // Find slots for this day of week
+        const daySlots = classSlots.filter((s) => Number(s.day_of_week) === dayOfWeekIndex)
+          .sort((a, b) => a.start_time.localeCompare(b.start_time));
+
+        for (const slot of daySlots) {
+          // If we have a limit set, check if we've reached it
+          if (quantity > 0) {
+            if (quantityType === "classes" && count >= quantity) {
+              break;
+            }
+            if (quantityType === "hours" && hours >= quantity) {
+              break;
+            }
+          }
+
+          // Calculate duration in hours
+          const [sh, sm] = slot.start_time.split(":").map(Number);
+          const [eh, em] = slot.end_time.split(":").map(Number);
+          const duration = ((eh * 60 + em) - (sh * 60 + sm)) / 60;
+
+          // Record this occurrence
+          occurrences.push({
+            ...slot,
+            date: new Date(loopDate),
+            dateStr: loopDate.toDateString(),
+          });
+
+          count += 1;
+          hours += duration;
+        }
+
+        // Move to next day
+        loopDate.setDate(loopDate.getDate() + 1);
+      }
+    }
+
+    return occurrences;
+  }, [filteredLessons, calendarCells, apiData]);
+
+  const selectedDayLessons = useMemo(() => {
+    if (!selectedDayDate) return [];
+    const dateStr = selectedDayDate.toDateString();
+    return actualOccurrences.filter((occ) => occ.dateStr === dateStr)
+      .sort((a, b) => a.start_time.localeCompare(b.start_time));
+  }, [selectedDayDate, actualOccurrences]);
+
   const handlePrevMonth = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
   };
@@ -231,7 +312,7 @@ export default function ProgramPage() {
     setClassId("");
     setTeacherId("");
     setRoomName("Sınıf 1");
-    setDayOfWeek(0);
+    setSelectedDays([0]);
     setStartTime("09:00");
     setEndTime("09:50");
     setErrorMsg(null);
@@ -243,7 +324,7 @@ export default function ProgramPage() {
     setClassId("");
     setTeacherId("");
     setRoomName("Sınıf 1");
-    setDayOfWeek(getDayOfWeekIndex(date));
+    setSelectedDays([getDayOfWeekIndex(date)]);
     setStartTime("09:00");
     setEndTime("09:50");
     setErrorMsg(null);
@@ -255,7 +336,7 @@ export default function ProgramPage() {
     setClassId(lesson.class_id);
     setTeacherId(lesson.teacher_id);
     setRoomName(lesson.room_name);
-    setDayOfWeek(Number(lesson.day_of_week));
+    setSelectedDays([Number(lesson.day_of_week)]);
     setStartTime(lesson.start_time);
     setEndTime(lesson.end_time);
     setErrorMsg(null);
@@ -264,7 +345,7 @@ export default function ProgramPage() {
 
   const handleSaveLesson = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!classId || !teacherId) return;
+    if (!classId || !teacherId || selectedDays.length === 0) return;
 
     setErrorMsg(null);
 
@@ -276,23 +357,26 @@ export default function ProgramPage() {
             class_id: classId,
             teacher_id: teacherId,
             room_name: roomName,
-            day_of_week: dayOfWeek,
+            day_of_week: selectedDays[0] ?? 0,
             start_time: startTime,
             end_time: endTime,
           },
         });
         setSuccessMsg("Ders programı başarıyla güncellendi.");
       } else {
-        await createSlotMutation.mutateAsync({
-          class_id: classId,
-          teacher_id: teacherId,
-          room_name: roomName,
-          day_of_week: dayOfWeek,
-          start_time: startTime,
-          end_time: endTime,
-          status: "scheduled",
-        });
-        setSuccessMsg("Yeni ders başarıyla eklendi.");
+        // Create slot for each selected weekday
+        for (const day of selectedDays) {
+          await createSlotMutation.mutateAsync({
+            class_id: classId,
+            teacher_id: teacherId,
+            room_name: roomName,
+            day_of_week: day,
+            start_time: startTime,
+            end_time: endTime,
+            status: "scheduled",
+          });
+        }
+        setSuccessMsg("Yeni dersler başarıyla eklendi.");
       }
       
       refetch();
@@ -495,8 +579,8 @@ export default function ProgramPage() {
               const cellDayOfWeek = getDayOfWeekIndex(cell.date);
               const isToday = cell.date.toDateString() === todayStr;
               
-              // Filter lessons matching this day of the week
-              const cellLessons = filteredLessons.filter((l) => Number(l.day_of_week) === cellDayOfWeek);
+              // Filter occurrences falling on this specific day's date
+              const cellLessons = actualOccurrences.filter((occ) => occ.dateStr === cell.date.toDateString());
               // Sort lessons chronologically
               const sortedLessons = [...cellLessons].sort((a, b) => a.start_time.localeCompare(b.start_time));
 
@@ -551,9 +635,23 @@ export default function ProgramPage() {
                             <div className={`text-[11px] leading-tight pr-4 truncate ${theme.text}`}>
                               {lesson.class_name}
                             </div>
-                            <div className="text-[9px] text-slate-600 dark:text-slate-300 flex items-center gap-0.5 mt-0.5 font-semibold">
-                              <Clock className="h-2.5 w-2.5 text-slate-500" />
-                              <span>{lesson.start_time} - {lesson.end_time}</span>
+                            {lesson.teacher_name && (
+                              <div className="text-[9px] text-slate-500 dark:text-slate-400 flex items-center gap-0.5 mt-0.5 font-semibold truncate">
+                                <User className="h-2.5 w-2.5 text-slate-400" />
+                                <span>{lesson.teacher_name}</span>
+                              </div>
+                            )}
+                            <div className="text-[9px] text-slate-600 dark:text-slate-300 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-0.5 font-semibold">
+                              <span className="flex items-center gap-0.5">
+                                <Clock className="h-2.5 w-2.5 text-slate-500" />
+                                <span>{lesson.start_time} - {lesson.end_time}</span>
+                              </span>
+                              {lesson.room_name && (
+                                <span className="flex items-center gap-0.5 text-slate-550 dark:text-slate-400">
+                                  <MapPin className="h-2.5 w-2.5 text-slate-400" />
+                                  <span>{lesson.room_name}</span>
+                                </span>
+                              )}
                             </div>
 
                             {/* Quick Delete Trash Icon */}
@@ -660,38 +758,67 @@ export default function ProgramPage() {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                    {language === "tr" ? "Derslik / Sınıf" : "Room / Classroom"}
-                  </label>
-                  <select
-                    value={roomName}
-                    onChange={(e) => setRoomName(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-primary focus:bg-white dark:focus:bg-slate-900 transition-all font-medium cursor-pointer"
-                    required
-                  >
-                    <option value="">{language === "tr" ? "Derslik Seçin" : "Select Classroom"}</option>
-                    {classroomsList?.map((room) => (
-                      <option key={room.id} value={room.name}>{room.name}</option>
-                    ))}
-                  </select>
-                </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                  {language === "tr" ? "Derslik / Sınıf" : "Room / Classroom"}
+                </label>
+                <select
+                  value={roomName}
+                  onChange={(e) => setRoomName(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-primary focus:bg-white dark:focus:bg-slate-900 transition-all font-medium cursor-pointer"
+                  required
+                >
+                  <option value="">{language === "tr" ? "Derslik Seçin" : "Select Classroom"}</option>
+                  {classroomsList?.map((room) => (
+                    <option key={room.id} value={room.name}>{room.name}</option>
+                  ))}
+                </select>
+              </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                    {language === "tr" ? "Gün" : "Day"}
-                  </label>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                  {language === "tr" ? "Gün" : "Day"}
+                </label>
+                {editingSlotId ? (
                   <select
-                    value={dayOfWeek}
-                    onChange={(e) => setDayOfWeek(Number(e.target.value))}
+                    value={selectedDays[0] ?? 0}
+                    onChange={(e) => setSelectedDays([Number(e.target.value)])}
                     className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-primary focus:bg-white dark:focus:bg-slate-900 transition-all font-medium cursor-pointer"
                   >
                     {weekdays.map((day, idx) => (
                       <option key={day} value={idx}>{day}</option>
                     ))}
                   </select>
-                </div>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {weekdays.map((day, idx) => {
+                      const isSelected = selectedDays.includes(idx);
+                      const shortName = day.slice(0, 3);
+                      return (
+                        <button
+                          key={day}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) {
+                              if (selectedDays.length > 1) {
+                                setSelectedDays(selectedDays.filter((d) => d !== idx));
+                              }
+                            } else {
+                              setSelectedDays([...selectedDays, idx]);
+                            }
+                          }}
+                          className={`flex-1 min-w-[45px] py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
+                            isSelected
+                              ? "bg-primary text-white border-primary shadow-sm"
+                              : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750"
+                          }`}
+                        >
+                          {shortName}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">

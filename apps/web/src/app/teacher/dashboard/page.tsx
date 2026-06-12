@@ -166,6 +166,87 @@ export default function TeacherDashboard() {
     { enabled: !!activeTeacher?.id }
   );
 
+  // Generate actual lesson occurrences for the visible calendar cells
+  const actualOccurrences = useMemo(() => {
+    if (!slots || slots.length === 0 || calendarCells.length === 0) return [];
+    
+    // Find the latest date in the calendar cells to cap our generation loop
+    const maxDate = new Date(calendarCells[calendarCells.length - 1].date);
+    maxDate.setHours(23, 59, 59, 999);
+
+    // Group the slots by class
+    const slotsByClass: Record<string, typeof slots> = {};
+    for (const slot of slots) {
+      if (!slotsByClass[slot.class_id]) {
+        slotsByClass[slot.class_id] = [];
+      }
+      slotsByClass[slot.class_id].push(slot);
+    }
+
+    const occurrences: Array<typeof slots[0] & { dateStr: string; date: Date }> = [];
+
+    // For each class, generate occurrences from its creation date up to maxDate
+    for (const classId of Object.keys(slotsByClass)) {
+      const classSlots = slotsByClass[classId];
+      const firstSlot = classSlots[0];
+      const quantity = (firstSlot as any).class_quantity || 0;
+      const quantityType = (firstSlot as any).class_quantity_type || "classes";
+      
+      const creationDate = new Date((firstSlot as any).class_created_at);
+      creationDate.setHours(0, 0, 0, 0);
+
+      // Start loop from the creation date
+      let loopDate = new Date(creationDate);
+      let count = 0;
+      let hours = 0;
+
+      // We'll loop up to maxDate, incrementing day-by-day.
+      // To avoid infinite loops in case of corrupt dates, cap at 365 days max.
+      const capDate = new Date(creationDate);
+      capDate.setDate(capDate.getDate() + 365);
+      const loopCap = maxDate < capDate ? maxDate : capDate;
+
+      while (loopDate <= loopCap) {
+        const dayOfWeekIndex = getDayOfWeekIndex(loopDate);
+        // Find slots for this day of week
+        const daySlots = classSlots.filter((s) => Number(s.day_of_week) === dayOfWeekIndex)
+          .sort((a, b) => a.start_time.localeCompare(b.start_time));
+
+        for (const slot of daySlots) {
+          // If we have a limit set, check if we've reached it
+          if (quantity > 0) {
+            if (quantityType === "classes" && count >= quantity) {
+              break;
+            }
+            if (quantityType === "hours" && hours >= quantity) {
+              break;
+            }
+          }
+
+          // Calculate duration in hours
+          const [sh, sm] = slot.start_time.split(":").map(Number);
+          const [eh, em] = slot.end_time.split(":").map(Number);
+          const duration = ((eh * 60 + em) - (sh * 60 + sm)) / 60;
+
+          // Record this occurrence
+          occurrences.push({
+            ...slot,
+            date: new Date(loopDate),
+            dateStr: loopDate.toDateString(),
+          });
+
+          count += 1;
+          hours += duration;
+        }
+
+        // Move to next day
+        loopDate.setDate(loopDate.getDate() + 1);
+      }
+    }
+
+    return occurrences;
+  }, [slots, calendarCells]);
+
   // 3. Fetch teacher's hour logs
   const { data: hourLogs, isLoading: loadingHours, refetch: refetchHours } = trpc.hours.getMyHourLogs.useQuery(
     undefined,
@@ -469,7 +550,7 @@ export default function TeacherDashboard() {
                   {calendarCells.map((cell, idx) => {
                     const cellDayOfWeek = getDayOfWeekIndex(cell.date);
                     const isToday = cell.date.toDateString() === new Date().toDateString();
-                    const cellLessons = slots.filter((l) => Number(l.day_of_week) === cellDayOfWeek);
+                    const cellLessons = actualOccurrences.filter((occ) => occ.dateStr === cell.date.toDateString());
                     const sortedLessons = [...cellLessons].sort((a, b) => a.start_time.localeCompare(b.start_time));
 
                     return (

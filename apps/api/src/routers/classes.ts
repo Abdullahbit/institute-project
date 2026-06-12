@@ -83,6 +83,8 @@ export const classesRouter = router({
           schoolId: ctx.schoolId,
           name: input.name,
           levelCode: input.level_code,
+          quantity: input.quantity,
+          quantityType: input.quantity_type,
           isActive: input.is_active,
         })
         .returning();
@@ -122,6 +124,8 @@ export const classesRouter = router({
       const updateData: Record<string, any> = { updatedAt: new Date() };
       if (input.data.name !== undefined) updateData.name = input.data.name;
       if (input.data.level_code !== undefined) updateData.levelCode = input.data.level_code;
+      if (input.data.quantity !== undefined) updateData.quantity = input.data.quantity;
+      if (input.data.quantity_type !== undefined) updateData.quantityType = input.data.quantity_type;
       if (input.data.is_active !== undefined) updateData.isActive = input.data.is_active;
 
       const [updated] = await db
@@ -220,6 +224,9 @@ export const classesRouter = router({
           schoolId: scheduleSlots.schoolId,
           classId: scheduleSlots.classId,
           className: classes.name,
+          classQuantity: classes.quantity,
+          classQuantityType: classes.quantityType,
+          classCreatedAt: classes.createdAt,
           teacherId: scheduleSlots.teacherId,
           teacherName: teachers.fullName,
           roomName: scheduleSlots.roomName,
@@ -242,6 +249,9 @@ export const classesRouter = router({
         school_id: r.schoolId,
         class_id: r.classId,
         class_name: r.className,
+        class_quantity: r.classQuantity,
+        class_quantity_type: r.classQuantityType,
+        class_created_at: r.classCreatedAt.toISOString(),
         teacher_id: r.teacherId,
         teacher_name: r.teacherName,
         room_name: r.roomName,

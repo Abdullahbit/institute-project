@@ -14,6 +14,8 @@ export default function SiniflarPage() {
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
   const [className, setClassName] = useState("");
   const [levelCode, setLevelCode] = useState("");
+  const [quantity, setQuantity] = useState<number>(0);
+  const [quantityType, setQuantityType] = useState<"classes" | "hours">("classes");
   const [classSaving, setClassSaving] = useState(false);
   const [classError, setClassError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -45,16 +47,38 @@ export default function SiniflarPage() {
     setTimeout(() => setSuccessMsg(null), 3000);
   };
 
+  const handleLevelCodeChange = (val: string) => {
+    setLevelCode(val);
+    const cleaned = val.trim().toUpperCase();
+    if (cleaned === "A1" || cleaned === "A2") {
+      setQuantity(40);
+      setQuantityType("classes");
+    } else if (cleaned === "B1" || cleaned === "B2") {
+      setQuantity(60);
+      setQuantityType("classes");
+    } else if (cleaned === "C1" || cleaned === "C2") {
+      setQuantity(80);
+      setQuantityType("classes");
+    } else if (cleaned !== "") {
+      setQuantity(20);
+      setQuantityType("hours");
+    }
+  };
+
   const handleOpenClassModal = (cls?: any) => {
     setClassError(null);
     if (cls) {
       setEditingClassId(cls.id);
       setClassName(cls.name);
       setLevelCode(cls.levelCode);
+      setQuantity(cls.quantity || 0);
+      setQuantityType((cls.quantityType as "classes" | "hours") || "classes");
     } else {
       setEditingClassId(null);
       setClassName("");
       setLevelCode("");
+      setQuantity(0);
+      setQuantityType("classes");
     }
     setClassModalOpen(true);
   };
@@ -73,6 +97,8 @@ export default function SiniflarPage() {
           data: {
             name: className,
             level_code: levelCode,
+            quantity: quantity,
+            quantity_type: quantityType,
           },
         });
         showSuccess("Sınıf başarıyla güncellendi.");
@@ -80,6 +106,8 @@ export default function SiniflarPage() {
         await createClassMutation.mutateAsync({
           name: className,
           level_code: levelCode,
+          quantity: quantity,
+          quantity_type: quantityType,
         });
         showSuccess("Yeni sınıf başarıyla oluşturuldu.");
       }
@@ -203,6 +231,7 @@ export default function SiniflarPage() {
                 <tr>
                   <th className="px-6 py-4">Sınıf Adı</th>
                   <th className="px-6 py-4">Seviye Kodu</th>
+                  <th className="px-6 py-4">Miktar / Süre</th>
                   <th className="px-6 py-4 text-center">Öğrenci Listesi (Roster)</th>
                   <th className="px-6 py-4">Durum</th>
                   <th className="px-6 py-4 text-right">İşlemler</th>
@@ -222,6 +251,12 @@ export default function SiniflarPage() {
                       <td className="px-6 py-4">
                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-150">
                           {cls.levelCode}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                          <BookOpen className="h-3.5 w-3.5 text-slate-400" />
+                          {cls.quantity} {cls.quantityType === "hours" ? "Saat" : "Ders"}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-center">
@@ -309,11 +344,37 @@ export default function SiniflarPage() {
                 <input
                   type="text"
                   value={levelCode}
-                  onChange={(e) => setLevelCode(e.target.value)}
+                  onChange={(e) => handleLevelCodeChange(e.target.value)}
                   placeholder="Örn: B1, A2, C1"
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
                   required
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Miktar Tipi</label>
+                  <select
+                    value={quantityType}
+                    onChange={(e) => setQuantityType(e.target.value as "classes" | "hours")}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium cursor-pointer"
+                  >
+                    <option value="classes">Ders Sayısı (Klasik Seviye)</option>
+                    <option value="hours">Ders Saati (Özel Ders)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Adet / Süre</label>
+                  <input
+                    type="number"
+                    value={quantity}
+                    onChange={(e) => setQuantity(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-primary focus:bg-white transition-all font-medium"
+                    min="0"
+                    required
+                  />
+                </div>
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">

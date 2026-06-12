@@ -4,12 +4,16 @@ import { uuidSchema } from "./common.js";
 export const createClassInputSchema = z.object({
   name: z.string().min(1),
   level_code: z.string().min(1),
+  quantity: z.number().int().min(0).default(0),
+  quantity_type: z.enum(["classes", "hours"]).default("classes"),
   is_active: z.boolean().default(true),
 });
 
 export const updateClassInputSchema = z.object({
   name: z.string().min(1).optional(),
   level_code: z.string().min(1).optional(),
+  quantity: z.number().int().min(0).optional(),
+  quantity_type: z.enum(["classes", "hours"]).optional(),
   is_active: z.boolean().optional(),
 });
 

@@ -61,6 +61,8 @@ export const classes = pgTable("classes", {
   schoolId: uuid("school_id").notNull().references(() => schools.id),
   name: text("name").notNull(),
   levelCode: text("level_code").notNull(),
+  quantity: integer("quantity").notNull().default(0),
+  quantityType: text("quantity_type").notNull().default("classes"), // 'classes' or 'hours'
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
