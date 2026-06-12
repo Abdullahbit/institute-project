@@ -34,6 +34,8 @@ export default function LoginPage() {
         router.push('/teacher/dashboard');
       } else if (role === 'student') {
         router.push('/student/dashboard');
+      } else if (role === 'parent') {
+        router.push('/parent/dashboard');
       }
     }
   }, [user, role, authLoading, router]);
@@ -88,6 +90,8 @@ export default function LoginPage() {
         router.push('/teacher/dashboard');
       } else if (userRole === 'student') {
         router.push('/student/dashboard');
+      } else if (userRole === 'parent') {
+        router.push('/parent/dashboard');
       } else {
         setError('Yetkisiz: Bilinmeyen kullanıcı rolü.');
         await supabase.auth.signOut();

@@ -9,7 +9,7 @@ import { getSchoolSlugFromHostname } from '../utils/slug';
 interface AuthContextType {
   user: User | null;
   session: Session | null;
-  role: 'admin' | 'teacher' | 'student' | null;
+  role: 'admin' | 'teacher' | 'student' | 'parent' | null;
   schoolId: string | null;
   loading: boolean;
   activeSchoolName: string | null;
@@ -23,7 +23,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [role, setRole] = useState<'admin' | 'teacher' | 'student' | null>(null);
+  const [role, setRole] = useState<'admin' | 'teacher' | 'student' | 'parent' | null>(null);
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeSchoolName, setActiveSchoolName] = useState<string | null>(null);
@@ -128,6 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const isAdminRoute = pathname.startsWith('/admin');
     const isTeacherRoute = pathname.startsWith('/teacher');
     const isStudentRoute = pathname.startsWith('/student');
+    const isParentRoute = pathname.startsWith('/parent');
     const isLoginOrInviteRoute = pathname.startsWith('/login') || pathname.startsWith('/invite');
 
     if (!user) {
@@ -148,6 +149,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (currentRole === 'teacher') {
       if (!isTeacherRoute && !isLoginOrInviteRoute) {
         router.push('/teacher/dashboard');
+        return;
+      }
+    }
+
+    if (currentRole === 'parent') {
+      if (!isParentRoute && !isLoginOrInviteRoute) {
+        router.push('/parent/dashboard');
         return;
       }
     }

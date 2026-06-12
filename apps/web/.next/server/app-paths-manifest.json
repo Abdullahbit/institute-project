@@ -1,12 +1,3 @@
 {
-  "/saat-takibi/page": "app/saat-takibi/page.js",
-  "/teacher/dashboard/page": "app/teacher/dashboard/page.js",
-  "/program/page": "app/program/page.js",
-  "/ogretmenler/page": "app/ogretmenler/page.js",
-  "/yoklama/page": "app/yoklama/page.js",
-  "/uyarilar/page": "app/uyarilar/page.js",
-  "/ogrenciler/page": "app/ogrenciler/page.js",
-  "/mesajlar/page": "app/mesajlar/page.js",
-  "/ayarlar/page": "app/ayarlar/page.js",
-  "/page": "app/page.js"
+  "/parent/mesajlar/page": "app/parent/mesajlar/page.js"
 }

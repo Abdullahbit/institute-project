@@ -18,17 +18,35 @@ export const messagesRouter = router({
         });
       }
 
-      // 1. Fetch all active profiles in the school (excluding current user)
+      // 1. Get current user's role
+      const [currentUserProfile] = await db
+        .select({ role: profiles.role })
+        .from(profiles)
+        .where(eq(profiles.id, userId))
+        .limit(1);
+      
+      const userRole = currentUserProfile?.role;
+
+      // Determine visibility conditions
+      const conditions = [
+        eq(profiles.schoolId, schoolId),
+        eq(profiles.isActive, true),
+        ne(profiles.id, userId)
+      ];
+
+      if (userRole === "parent") {
+        // Parent only sees admins
+        conditions.push(eq(profiles.role, "admin"));
+      } else if (userRole !== "admin") {
+        // Teacher/Student sees everyone except parents
+        conditions.push(ne(profiles.role, "parent"));
+      }
+
+      // 2. Fetch active profiles based on role visibility rules
       const allProfiles = await db
         .select()
         .from(profiles)
-        .where(
-          and(
-            eq(profiles.schoolId, schoolId),
-            eq(profiles.isActive, true),
-            ne(profiles.id, userId)
-          )
-        )
+        .where(and(...conditions))
         .orderBy(profiles.fullName);
 
       // 2. Fetch all messages in the school involving current user to compute last messages & unread counts
