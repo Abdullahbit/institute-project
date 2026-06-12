@@ -12,11 +12,20 @@ import { inngestFunctions } from "./inngest/functions.js";
 import { logger } from "./lib/logger.js";
 import { db } from "@workspace/db";
 import { hourLogs, teachers, profiles, schools } from "@workspace/db/schema";
-import { eq, and, like } from "drizzle-orm";
+import { eq, and, like, sql } from "drizzle-orm";
 import { getSupabaseAdmin } from "./lib/supabase.js";
 import Stripe from "stripe";
 
 export async function buildServer() {
+  // Fix constraint to allow parent role
+  try {
+    await db.execute(sql`ALTER TABLE profiles DROP CONSTRAINT IF EXISTS profiles_role_check;`);
+    await db.execute(sql`ALTER TABLE profiles ADD CONSTRAINT profiles_role_check CHECK (role IN ('admin', 'teacher', 'student', 'parent'));`);
+    logger.info("Updated profiles check constraint successfully.");
+  } catch (err) {
+    logger.error({ err }, "Failed to update constraint");
+  }
+
   const app = Fastify({ logger: false });
 
   // Custom content type parser to preserve raw buffer body for Stripe webhook validation

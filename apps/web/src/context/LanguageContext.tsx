@@ -18,6 +18,10 @@ export const translations = {
     nav_logout: "Çıkış Yap",
     nav_messages: "Mesajlar",
     nav_yoklama: "Yoklama Al",
+    nav_attendance: "Yoklama",
+    nav_parents: "Veliler",
+    nav_progress: "Gelişim Raporu",
+    nav_behavior: "Davranış Notları",
     
     // Roles
     role_admin: "Yönetici",
@@ -106,9 +110,13 @@ export const translations = {
     nav_hours: "Hours Tracker",
     nav_alerts: "Alerts",
     nav_settings: "Settings",
-    nav_logout: "Logout",
+    nav_logout: "Log Out",
     nav_messages: "Messages",
-    nav_yoklama: "Attendance",
+    nav_yoklama: "Take Attendance",
+    nav_attendance: "Attendance",
+    nav_parents: "Parents",
+    nav_progress: "Progress Report",
+    nav_behavior: "Behavior Notes",
     
     // Roles
     role_admin: "Administrator",

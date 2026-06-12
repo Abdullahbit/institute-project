@@ -16,7 +16,8 @@ import {
   Loader2,
   X,
   ClipboardCheck,
-  Check
+  Check,
+  Star
 } from "lucide-react";
 
 const ROUND_LABELS = ["1. Tur", "2. Tur", "3. Tur", "4. Tur"];
@@ -54,6 +55,16 @@ export default function TeacherTodayPage() {
 
   const logAttendance = trpc.students.logAttendance.useMutation();
   const submitProgressReport = trpc.students.submitProgressReport.useMutation();
+  const submitBehaviorFeedback = trpc.parents.submitBehaviorFeedback.useMutation();
+
+  // Behavior feedback states
+  const [behaviorModalOpen, setBehaviorModalOpen] = useState(false);
+  const [behaviorStudentId, setBehaviorStudentId] = useState<string | null>(null);
+  const [behaviorStudentName, setBehaviorStudentName] = useState("");
+  const [behaviorCategory, setBehaviorCategory] = useState<"excellent" | "good" | "warning" | "issue">("good");
+  const [behaviorTitle, setBehaviorTitle] = useState("");
+  const [behaviorDescription, setBehaviorDescription] = useState("");
+  const [behaviorSuccess, setBehaviorSuccess] = useState<string | null>(null);
 
   // Protect route
   useEffect(() => {
@@ -162,6 +173,38 @@ export default function TeacherTodayPage() {
   const handleOpenCheckOut = (sessionId: string) => {
     setSelectedSessionId(sessionId);
     setShowConfirmModal(true);
+  };
+
+  const handleOpenBehaviorModal = (studentId: string, studentName: string) => {
+    setBehaviorStudentId(studentId);
+    setBehaviorStudentName(studentName);
+    setBehaviorCategory("good");
+    setBehaviorTitle("");
+    setBehaviorDescription("");
+    setBehaviorSuccess(null);
+    setBehaviorModalOpen(true);
+  };
+
+  const handleSubmitBehavior = async () => {
+    if (!behaviorStudentId || !behaviorTitle) return;
+
+    try {
+      await submitBehaviorFeedback.mutateAsync({
+        student_id: behaviorStudentId,
+        lesson_session_id: activeSessionId || undefined,
+        category: behaviorCategory,
+        title: behaviorTitle,
+        description: behaviorDescription,
+      });
+
+      setBehaviorSuccess("Davranış notu başarıyla kaydedildi!");
+      setTimeout(() => {
+        setBehaviorModalOpen(false);
+        setBehaviorSuccess(null);
+      }, 1500);
+    } catch (err: any) {
+      setErrorMessage(err.message || "Davranış notu kaydedilemedi.");
+    }
   };
 
   const handleConfirmCheckOut = () => {
@@ -561,7 +604,16 @@ export default function TeacherTodayPage() {
                     return (
                       <div key={student.id} className="border border-slate-200/70 rounded-xl p-4 bg-slate-50/40 space-y-3">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                          <span className="font-bold text-slate-800 text-sm">{student.full_name}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-800 text-sm">{student.full_name}</span>
+                            <button
+                              onClick={() => handleOpenBehaviorModal(student.id, student.full_name)}
+                              className="p-1.5 text-amber-500 hover:bg-amber-50 rounded-lg transition-colors border border-transparent hover:border-amber-200"
+                              title="Davranış Notu Ekle"
+                            >
+                              <Star className="h-4 w-4" />
+                            </button>
+                          </div>
 
                           {/* Status Toggle */}
                           <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-200 select-none">
@@ -731,6 +783,89 @@ export default function TeacherTodayPage() {
               >
                 {checkOutMutation.isPending ? "Tamamlanıyor..." : "Dersi Bitir"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Davranış Notu Modal ─── */}
+      {behaviorModalOpen && behaviorStudentId && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div 
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            onClick={() => setBehaviorModalOpen(false)}
+          />
+          <div className="relative bg-white w-full max-w-md rounded-2xl shadow-xl flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <div>
+                <h2 className="text-lg font-bold text-slate-800">Davranış Notu Ekle</h2>
+                <p className="text-xs text-slate-500">{behaviorStudentName}</p>
+              </div>
+              <button 
+                onClick={() => setBehaviorModalOpen(false)}
+                className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto">
+              {behaviorSuccess ? (
+                <div className="py-8 flex flex-col items-center justify-center text-emerald-600">
+                  <CheckCircle className="h-12 w-12 mb-3" />
+                  <p className="font-bold">{behaviorSuccess}</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Kategori</label>
+                    <select
+                      value={behaviorCategory}
+                      onChange={(e) => setBehaviorCategory(e.target.value as any)}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    >
+                      <option value="excellent">Mükemmel (Örn: Çok iyi katılım)</option>
+                      <option value="good">İyi (Örn: Dersi dinledi)</option>
+                      <option value="warning">Dikkat (Örn: Dikkati dağınıktı)</option>
+                      <option value="issue">Sorun (Örn: Derse katılmadı)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Kısa Başlık</label>
+                    <input
+                      type="text"
+                      value={behaviorTitle}
+                      onChange={(e) => setBehaviorTitle(e.target.value)}
+                      placeholder="Örn: Harika performans"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Detaylı Açıklama (İsteğe Bağlı)</label>
+                    <textarea
+                      value={behaviorDescription}
+                      onChange={(e) => setBehaviorDescription(e.target.value)}
+                      placeholder="Velinin görmesi için detaylı not ekleyebilirsiniz..."
+                      rows={3}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleSubmitBehavior}
+                    disabled={!behaviorTitle || submitBehaviorFeedback.isPending}
+                    className="w-full bg-primary hover:bg-primary/90 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-sm disabled:opacity-50 flex items-center justify-center gap-2 mt-4"
+                  >
+                    {submitBehaviorFeedback.isPending ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      "Davranış Notunu Kaydet"
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

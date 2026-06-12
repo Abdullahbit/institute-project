@@ -2,8 +2,8 @@ import { router, schoolProcedure, subscribedProcedure } from "../trpc/trpc.js";
 import { logAttendanceInputSchema, submitProgressReportInputSchema } from "@institute/types";
 import { TRPCError } from "@trpc/server";
 import { db } from "@workspace/db";
-import { studentLogs, progressReports, lessonSessions, students, profiles, classEnrollments, classes, scheduleSlots, teachers } from "@workspace/db/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { studentLogs, progressReports, lessonSessions, students, profiles, classEnrollments, classes, scheduleSlots, teachers, messages, parents, parentStudents } from "@workspace/db/schema";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 export const studentsRouter = router({
@@ -344,6 +344,80 @@ export const studentsRouter = router({
           updatedAt: new Date(),
         })
         .where(eq(lessonSessions.id, input.session_id));
+
+      // 5. Send notifications to parents for absent students
+      const absentStudents = input.roster.filter((r) => r.status === "absent");
+      if (absentStudents.length > 0) {
+        // Fetch session details for the email message
+        const [sessionDetails] = await db
+          .select({
+            date: lessonSessions.sessionDate,
+            startTime: scheduleSlots.startTime,
+            endTime: scheduleSlots.endTime,
+            className: classes.name,
+          })
+          .from(lessonSessions)
+          .innerJoin(scheduleSlots, eq(lessonSessions.scheduleSlotId, scheduleSlots.id))
+          .innerJoin(classes, eq(scheduleSlots.classId, classes.id))
+          .where(eq(lessonSessions.id, input.session_id))
+          .limit(1);
+
+        if (sessionDetails) {
+          const timeLabel = `${sessionDetails.startTime?.slice(0, 5)} - ${sessionDetails.endTime?.slice(0, 5)}`;
+          const dateLabel = sessionDetails.date;
+
+          for (const absentRow of absentStudents) {
+            // Get student info
+            const [studentInfo] = await db
+              .select({ name: students.fullName })
+              .from(students)
+              .where(eq(students.id, absentRow.student_id))
+              .limit(1);
+
+            if (!studentInfo) continue;
+
+            // Get linked parents
+            const linkedParents = await db
+              .select({
+                id: parents.id,
+                userId: parents.userId,
+                email: parents.email,
+                fullName: parents.fullName,
+              })
+              .from(parentStudents)
+              .innerJoin(parents, eq(parentStudents.parentId, parents.id))
+              .where(
+                and(
+                  eq(parentStudents.studentId, absentRow.student_id),
+                  eq(parentStudents.isActive, true),
+                  eq(parents.isActive, true)
+                )
+              );
+
+            for (const parent of linkedParents) {
+              const messageContent = `Sayın ${parent.fullName},\n\nÖğrencimiz ${studentInfo.name}, ${dateLabel} tarihindeki ${timeLabel} saatleri arasındaki ${sessionDetails.className} dersine (${roundNumber}. Tur) katılmamıştır.\n\nBilgilerinize sunarız.`;
+              
+              // 5a. Mock Email Sending
+              console.log(`\n================= E-POSTA GÖNDERİLDİ =================`);
+              console.log(`Alıcı: ${parent.email}`);
+              console.log(`Konu: Devamsızlık Bildirimi - ${studentInfo.name}`);
+              console.log(`Mesaj: ${messageContent}`);
+              console.log(`======================================================\n`);
+
+              // 5b. Send Internal Message (if parent has a user account)
+              if (parent.userId && ctx.userId) {
+                // Find system/admin or current teacher user id
+                await db.insert(messages).values({
+                  schoolId: ctx.schoolId,
+                  senderId: ctx.userId, // Teacher sending the attendance
+                  receiverId: parent.userId,
+                  content: messageContent,
+                });
+              }
+            }
+          }
+        }
+      }
 
       return { success: true, presentCount, roundNumber };
     }),

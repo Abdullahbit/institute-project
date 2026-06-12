@@ -16,7 +16,10 @@ import {
   LogOut,
   BookOpen,
   MessageSquare,
-  ClipboardCheck
+  ClipboardCheck,
+  BarChart3,
+  Heart,
+  UserCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
@@ -59,10 +62,11 @@ const adminNavItems = [
   { href: "/siniflar", label: "Sınıflar", translationKey: "nav_classes" as const, icon: BookOpen },
   { href: "/ogretmenler", label: "Öğretmenler", translationKey: "nav_teachers" as const, icon: Users },
   { href: "/ogrenciler", label: "Öğrenciler", translationKey: "nav_students" as const, icon: GraduationCap },
-  { href: "/yoklama", label: "Yoklama", translationKey: "nav_home" as const, icon: ClipboardCheck },
+  { href: "/yoklama", label: "Yoklama", translationKey: "nav_attendance" as const, icon: ClipboardCheck },
   { href: "/saat-takibi", label: "Saat Takibi", translationKey: "nav_hours" as const, icon: Clock },
   { href: "/uyarilar", label: "Uyarılar", translationKey: "nav_alerts" as const, icon: Bell },
   { href: "/mesajlar", label: "Mesajlar", translationKey: "nav_messages" as const, icon: MessageSquare },
+  { href: "/veliler", label: "Veliler", translationKey: "nav_parents" as const, icon: UserCheck },
   { href: "/ayarlar", label: "Ayarlar", translationKey: "nav_settings" as const, icon: Settings },
 ];
 
@@ -82,6 +86,15 @@ const teacherNavItems = [
 const studentNavItems = [
   { href: "/student/dashboard", label: "Ana Sayfa", translationKey: "nav_home" as const, icon: Home },
   { href: "/student/mesajlar", label: "Mesajlar", translationKey: "nav_messages" as const, icon: MessageSquare },
+];
+
+const parentNavItems = [
+  { href: "/parent/dashboard", label: "Ana Sayfa", translationKey: "nav_home" as const, icon: Home },
+  { href: "/parent/progress", label: "Gelişim Raporu", translationKey: "nav_progress" as const, icon: BarChart3 },
+  { href: "/parent/attendance", label: "Yoklama Takibi", translationKey: "nav_attendance" as const, icon: ClipboardCheck },
+  { href: "/parent/schedule", label: "Ders Programı", translationKey: "nav_program" as const, icon: Calendar },
+  { href: "/parent/behavior", label: "Davranış Notları", translationKey: "nav_behavior" as const, icon: Heart },
+  { href: "/parent/mesajlar", label: "Mesajlar", translationKey: "nav_messages" as const, icon: MessageSquare },
 ];
 
 export function AdminShell({
@@ -118,9 +131,11 @@ export function AdminShell({
       ? studentNavItems 
       : role === "teacher" 
         ? teacherNavItems 
-        : isFounder
-          ? founderNavItems
-          : adminNavItems;
+        : role === "parent"
+          ? parentNavItems
+          : isFounder
+            ? founderNavItems
+            : adminNavItems;
 
   React.useEffect(() => {
     const loadIdentity = () => {

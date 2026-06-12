@@ -8,6 +8,7 @@ export * from "./invitation.js";
 export * from "./hours.js";
 export * from "./student.js";
 export * from "./classes.js";
+export * from "./parent.js";
 
 
 

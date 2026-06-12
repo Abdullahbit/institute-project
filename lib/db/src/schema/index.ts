@@ -238,4 +238,44 @@ export const studentTermReports = pgTable("student_term_reports", {
   notes: text("notes").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// 18. Parents Table
+export const parents = pgTable("parents", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  schoolId: uuid("school_id").notNull().references(() => schools.id),
+  userId: uuid("user_id"),
+  fullName: text("full_name").notNull(),
+  phone: text("phone"),
+  email: text("email"),
+  password: text("password"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// 19. Parent-Student Relationships
+export const parentStudents = pgTable("parent_students", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  parentId: uuid("parent_id").notNull().references(() => parents.id),
+  studentId: uuid("student_id").notNull().references(() => students.id),
+  relationship: text("relationship").notNull().default("parent"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// 20. Behavior Feedbacks Table
+export const behaviorFeedbacks = pgTable("behavior_feedbacks", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  schoolId: uuid("school_id").notNull().references(() => schools.id),
+  studentId: uuid("student_id").notNull().references(() => students.id),
+  teacherId: uuid("teacher_id").notNull().references(() => teachers.id),
+  lessonSessionId: uuid("lesson_session_id").references(() => lessonSessions.id),
+  category: text("category").notNull().default("good"), // 'excellent' | 'good' | 'warning' | 'issue'
+  title: text("title").notNull(),
+  description: text("description"),
+  feedbackDate: date("feedback_date").notNull().defaultNow(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
