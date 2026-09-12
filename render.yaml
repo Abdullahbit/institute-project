@@ -5,7 +5,7 @@ services:
     plan: free
     # Run from the root to preserve the pnpm monorepo context
     buildCommand: pnpm install --frozen-lockfile && pnpm --filter @institute/api build
-    startCommand: cd apps/api && npx tsx src/index.ts
+    startCommand: node apps/api/dist/index.js
     envVars:
       - key: NODE_ENV
         value: production
