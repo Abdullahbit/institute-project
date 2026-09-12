@@ -10,7 +10,7 @@
     "dev:web": "pnpm --filter @institute/web dev",
     "dev:mobile": "pnpm --filter @institute/mobile dev",
     "dev:edupanel": "pnpm --filter @workspace/edupanel dev",
-    "build": "pnpm run typecheck && turbo run build",
+    "build": "pnpm run typecheck && turbo run build --filter=@institute/api --filter=@institute/web",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./apps/**\" --filter \"./packages/**\" --filter \"./scripts\" --if-present run typecheck"
   },
