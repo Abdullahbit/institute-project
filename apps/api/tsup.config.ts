@@ -5,4 +5,5 @@ export default defineConfig({
   format: ["esm"],
   clean: true,
   noExternal: ["@workspace/db", "@institute/types"],
+  external: ["pg", "drizzle-orm"],
 });
