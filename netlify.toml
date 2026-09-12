@@ -1,0 +1,12 @@
+[build]
+  # Run from the monorepo root so pnpm workspace deps resolve correctly
+  base = "."
+  command = "pnpm install --frozen-lockfile && pnpm --filter @institute/web build"
+  publish = "apps/web/.next"
+
+[build.environment]
+  NODE_VERSION = "20"
+  PNPM_VERSION = "9"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"

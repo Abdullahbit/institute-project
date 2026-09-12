@@ -24,7 +24,7 @@ export const translations = {
     nav_behavior: "Davranış Notları",
     
     // Roles
-    role_admin: "Yönetici",
+    role_admin: "Okul Yöneticisi",
     role_teacher: "Öğretmen",
     role_student: "Öğrenci",
 
@@ -119,7 +119,7 @@ export const translations = {
     nav_behavior: "Behavior Notes",
     
     // Roles
-    role_admin: "Administrator",
+    role_admin: "School Admin",
     role_teacher: "Teacher",
     role_student: "Student",
 

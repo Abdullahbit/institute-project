@@ -13,6 +13,7 @@ import { Mail, Lock, Loader2, Sparkles, ShieldAlert, Check, Globe, X } from 'luc
 export default function LoginPage() {
   const { language, setLanguage, t } = useLanguage();
   const { user, role, loading: authLoading, setLocalSchoolSlug } = useAuth();
+  const [selectedRole, setSelectedRole] = useState<'admin' | 'teacher' | 'student'>('admin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -216,6 +217,60 @@ export default function LoginPage() {
               {currentSlug ? `${t('login_school_login')}: ${schoolTitle}` : t('login_portal_title')}
             </p>
           </div>
+
+          {/* Role selection tab buttons */}
+          <div className="grid grid-cols-3 gap-2 bg-[#14151F] p-1 rounded-xl border border-slate-800/80 mb-5">
+            <button
+              type="button"
+              onClick={() => setSelectedRole('admin')}
+              className={`py-2 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                selectedRole === 'admin'
+                  ? 'bg-violet-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              {t('role_admin')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedRole('teacher')}
+              className={`py-2 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                selectedRole === 'teacher'
+                  ? 'bg-violet-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              {t('role_teacher')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedRole('student')}
+              className={`py-2 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                selectedRole === 'student'
+                  ? 'bg-violet-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              {t('role_student')}
+            </button>
+          </div>
+
+          {/* Demo Helper Banner */}
+          {selectedRole === 'admin' && (
+            <div className="mb-4 p-2.5 rounded-xl bg-violet-600/10 border border-violet-500/20 text-[10px] text-slate-350 flex justify-between items-center gap-2">
+              <span>Demo Admin: simaalouzi@gmail.com</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail('simaalouzi@gmail.com');
+                  setPassword('SimaEdu2026!');
+                }}
+                className="text-violet-400 hover:text-violet-300 font-bold cursor-pointer transition-colors"
+              >
+                Autofill
+              </button>
+            </div>
+          )}
 
           {error && (
             <div className="mb-5 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-semibold flex items-center gap-2">

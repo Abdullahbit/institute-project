@@ -1,3 +1,6 @@
 {
-  "/parent/mesajlar/page": "app/parent/mesajlar/page.js"
+  "/page": "app/page.js",
+  "/login/page": "app/login/page.js",
+  "/program/page": "app/program/page.js",
+  "/siniflar/page": "app/siniflar/page.js"
 }
